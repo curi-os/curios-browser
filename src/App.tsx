@@ -1,8 +1,8 @@
 import React from 'react';
-import { HelloWorld } from './components/HelloWorld';
+import CuriosChat from './components/chat/chat';
 
 function App() {
-  return <HelloWorld />;
+  return <CuriosChat />;
 }
 
 export default App;
