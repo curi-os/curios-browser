@@ -105,6 +105,8 @@ export default function CuriosChat() {
   };
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const composerRef = useRef<HTMLDivElement | null>(null);
+  const [composerHeight, setComposerHeight] = useState(0);
 
   const sessionId = useMemo(() => {
     const key = "curios.sessionId";
@@ -117,8 +119,18 @@ export default function CuriosChat() {
   }, []);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, isSending]);
+
+  useEffect(() => {
+    function measure() {
+      const h = composerRef.current?.offsetHeight || 0;
+      setComposerHeight(h);
+    }
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, []);
 
   useEffect(() => {
     localStorage.setItem("curios.theme", theme);
@@ -237,7 +249,10 @@ export default function CuriosChat() {
           </header>
 
           {/* Messages */}
-          <main className="mx-auto w-full max-w-4xl flex-1 px-4 pb-28 pt-6">
+          <main
+            className="mx-auto w-full max-w-4xl flex-1 px-4 pt-6"
+            style={{ paddingBottom: composerHeight + 16 }}
+          >
             <div className="space-y-4">
               {messages.map((m) => (
                 <MessageBubble key={m.id} role={m.role} text={m.text} ui={ui} />
@@ -254,12 +269,15 @@ export default function CuriosChat() {
                 </div>
               )}
 
-              <div ref={bottomRef} />
+              <div ref={bottomRef} style={{ scrollMarginBottom: composerHeight + 16 }} />
             </div>
           </main>
 
           {/* Composer */}
-          <div className={`fixed inset-x-0 bottom-0 border-t ${ui.border} ${ui.topbarBg} backdrop-blur md:left-80`}>
+          <div
+            ref={composerRef}
+            className={`fixed inset-x-0 bottom-0 border-t ${ui.border} ${ui.topbarBg} backdrop-blur md:left-80`}
+          >
             <div className="mx-auto w-full max-w-4xl px-4 py-4">
               <div className={`rounded-2xl border ${ui.border} ${ui.card} p-2`}>
                 <textarea
