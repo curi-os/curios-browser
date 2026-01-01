@@ -67,7 +67,7 @@ export default function CuriosChat() {
     {
       id: uid(),
       role: "assistant",
-      text: "Welcome to CuriOS. Do you want to create an account or sign in?",
+      text: <>Welcome to CuriOS. Do you want to <strong>create an account, sign in or continue as a guest?</strong></>,
     },
   ]);
   const [input, setInput] = useState("");
@@ -469,7 +469,7 @@ function MessageBubble({
           isUser ? ui.userBubble : ui.assistantBubble,
         ].join(" ")}
       >
-        {text}
+        {typeof text === "string" ? <div dangerouslySetInnerHTML={{ __html: text }} /> : text}
       </div>
     </div>
   );
