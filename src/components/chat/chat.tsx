@@ -385,8 +385,8 @@ function SidebarHeader({
         </div>
       </div>
 
-      <div className="mt-3 text-xs text-neutral-500">
-        Select a context. In the MVP, only <span className="text-neutral-800 dark:text-neutral-200">System</span> is active.
+      <div className="mt-3 text-xs text-neutral-300">
+        Context: You are now on <span className="text-neutral-500 dark:text-neutral-300">System</span>.
       </div>
     </div>
   );
