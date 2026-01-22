@@ -188,23 +188,25 @@ export default function CuriosChat() {
   }
 
   return (
-    <div className={`min-h-screen ${ui.app}`}>
-      <div className="flex min-h-screen">
+    <div className={`h-screen overflow-hidden ${ui.app}`}>
+      <div className="flex h-full">
         {/* Sidebar desktop */}
-        <aside className={`hidden w-80 flex-col border-r ${ui.border} ${ui.panel} md:flex`}>
+        <aside className={`hidden w-80 flex-col overflow-hidden border-r ${ui.border} ${ui.panel} md:flex`}>
           <SidebarHeader onReset={resetSession} />
-          <ContextList
-            activeContext={activeContext}
-            onSelect={(id) => setActiveContext(id)}
-            ui={ui}
-          />
+          <div className="flex-1 overflow-y-auto">
+            <ContextList
+              activeContext={activeContext}
+              onSelect={(id) => setActiveContext(id)}
+              ui={ui}
+            />
+          </div>
           <div className={`mt-auto border-t ${ui.border} p-4 text-xs text-neutral-500`}>
             Session: <span className="font-mono">{sessionId}</span>
           </div>
         </aside>
 
         {/* Main */}
-        <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
           {/* Top bar */}
           <header className={`sticky top-0 z-10 border-b ${ui.border} ${ui.topbarBg} backdrop-blur`}>
             <div className="mx-auto flex max-w-4xl items-center gap-3 px-4 py-3">
@@ -250,7 +252,7 @@ export default function CuriosChat() {
 
           {/* Messages */}
           <main
-            className="mx-auto w-full max-w-4xl flex-1 px-4 pt-6"
+            className="mx-auto w-full max-w-4xl flex-1 overflow-y-auto px-4 pt-6"
             style={{ paddingBottom: composerHeight + 16 }}
           >
             <div className="space-y-4">
