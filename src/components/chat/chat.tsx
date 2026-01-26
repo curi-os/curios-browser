@@ -1,9 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import curiosLogoWhiteUrl from "../../images/curios-logo-white.png";
+import curiosLogoDarkUrl from "../../images/curios-logo-dark.png";
 
 type Msg = {
   id: string;
   role: "user" | "assistant";
   text: React.ReactNode | string;
+  position?: "center" | "left" | "right";
 };
 
 type ChatResponse = {
@@ -29,7 +32,7 @@ const CONTEXTS: ContextItem[] = [
   {
     id: "system",
     label: "System",
-    description: "Onboarding, account and providers",
+    description: "Onboarding, account and AI providers",
     enabled: true,
   },
   {
@@ -57,12 +60,25 @@ export default function CuriosChat() {
 
   const [activeContext, setActiveContext] = useState<ContextId>("system");
   const activeContextMeta = CONTEXTS.find((c) => c.id === activeContext)!;
+  const [theme, setTheme] = useState<"dark" | "light">(
+    (localStorage.getItem("curios.theme") as "dark" | "light") || "dark"
+  );
+  const isLight = theme === "light";
+  const [ curiosLogo, setCuriosLogo ] = useState<string>(isLight ? curiosLogoWhiteUrl : curiosLogoDarkUrl);
+
+  useEffect(() => {
+    setCuriosLogo(isLight ? curiosLogoWhiteUrl : curiosLogoDarkUrl);
+  }, [isLight]);
+
+  // Keep a stable id for the logo message
+  const logoMsgIdRef = useRef<string>(uid());
 
   const [messages, setMessages] = useState<Msg[]>([
     {
-      id: uid(),
+      id: logoMsgIdRef.current,
       role: "user",
-      text: <img src="https://avatars.githubusercontent.com/u/234488358?s=200&v=4" className="h-32 w-32 center rounded-xl" />,
+      text: <img src={curiosLogo} className="h-52 w-52 center rounded-xl" />,
+      position: "center"
     },
     {
       id: uid(),
@@ -76,11 +92,6 @@ export default function CuriosChat() {
 
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
-  const [theme, setTheme] = useState<"dark" | "light">(
-    (localStorage.getItem("curios.theme") as "dark" | "light") || "dark"
-  );
-
-  const isLight = theme === "light";
   const ui = {
     app: isLight ? "bg-white text-neutral-900" : "bg-neutral-950 text-neutral-100",
     border: isLight ? "border-neutral-200" : "border-neutral-800",
@@ -187,6 +198,17 @@ export default function CuriosChat() {
     window.location.reload();
   }
 
+  // Update the logo message when the theme/logo source changes
+  useEffect(() => {
+    setMessages(prev =>
+      prev.map(m =>
+        m.id === logoMsgIdRef.current
+          ? { ...m, text: <img src={curiosLogo} className="h-52 w-52 center rounded-xl" /> }
+          : m
+      )
+    );
+  }, [curiosLogo]);
+
   return (
     <div className={`h-screen overflow-hidden ${ui.app}`}>
       <div className="flex h-full">
@@ -223,7 +245,8 @@ export default function CuriosChat() {
                 <div className="min-w-0 leading-tight">
                   <div className="truncate text-sm font-semibold">CuriOS</div>
                   <div className="truncate text-xs text-neutral-400">
-                    context: {activeContextMeta.label} · state: {state}
+                    context: {activeContextMeta.label} <br />
+                    state: {state}
                   </div>
                 </div>
               </div>
@@ -236,8 +259,38 @@ export default function CuriosChat() {
                   className={`rounded-lg border ${ui.border} px-3 py-1.5 text-xs ${ui.hoverPanel}`}
                   onClick={() => setTheme(isLight ? "dark" : "light")}
                   title="Toggle light/dark mode"
+                  aria-label={isLight ? "Switch to dark mode" : "Switch to light mode"}
                 >
-                  {isLight ? "Dark mode" : "Light mode"}
+                  {isLight ? (
+                  // Moon icon (switch to dark)
+                  <svg
+                    className="h-4 w-4"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M21.752 15.002A9.718 9.718 0 0112 21.75 9.75 9.75 0 0112 2.25c.64 0 1.27.06 1.882.178a.75.75 0 01.102 1.458 7.5 7.5 0 108.13 10.7.75.75 0 01-.362 1.416z" />
+                  </svg>
+                  ) : (
+                  // Sun icon (switch to light)
+                  <svg
+                    className="h-4 w-4"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M12 3v2.25M12 18.75V21M20.25 12H21M3 12h2.25M17.303 6.697l1.591-1.591M5.106 18.894l1.591-1.591M17.303 17.303l1.591 1.591M5.106 5.106l1.591 1.591" />
+                    <circle cx="12" cy="12" r="3.75" />
+                  </svg>
+                  )}
                 </button>
                 <button
                   className={`rounded-lg border ${ui.border} px-3 py-1.5 text-xs ${ui.hoverPanel}`}
@@ -257,7 +310,7 @@ export default function CuriosChat() {
           >
             <div className="space-y-4">
               {messages.map((m) => (
-                <MessageBubble key={m.id} role={m.role} text={m.text} ui={ui} />
+                <MessageBubble key={m.id} role={m.role} text={m.text} ui={ui} position={m.position} />
               ))}
 
               {isSending && (
@@ -359,7 +412,7 @@ function SidebarHeader({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div>
-            <img className="h-10 w-10 rounded-2xl bg-neutral-200 dark:bg-neutral-800" src="https://avatars.githubusercontent.com/u/234488358?s=200&v=4" alt="CuriOS logo" />
+            <img className="h-10 w-10 rounded-2xl bg-neutral-200 dark:bg-neutral-800" src={curiosLogoWhiteUrl} alt="CuriOS logo" />
           </div>
           <div className="leading-tight">
             <div className="text-sm font-semibold">CuriOS</div>
@@ -457,12 +510,23 @@ function MessageBubble({
   role,
   text,
   ui,
+  position,
 }: {
   role: "user" | "assistant";
   text: React.ReactNode | string;
   ui: ReturnType<typeof buildUiStub>;
+  position?: "center" | "left" | "right";
 }) {
   const isUser = role === "user";
+  if (position === "center") {
+    return (
+      <div className="flex justify-center">
+        <div>
+          {typeof text === "string" ? <div dangerouslySetInnerHTML={{ __html: text }} /> : text}
+        </div>
+      </div>
+    );
+  }
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
       <div
