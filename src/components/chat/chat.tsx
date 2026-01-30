@@ -1,59 +1,17 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import curiosLogoWhiteUrl from "../../images/curios-logo-white.png";
 import curiosLogoDarkUrl from "../../images/curios-logo-dark.png";
+import SidebarHeader from "./SidebarHeader";
+import ContextList from "./ContextList";
+import MessageBubble from "./MessageBubble";
+import { uid } from "./utils";
+import { CONTEXTS } from "./contexts";
+import type { Msg, ChatResponse, ContextId, Ui } from "./types";
 
-type Msg = {
-  id: string;
-  role: "user" | "assistant";
-  text: React.ReactNode | string;
-  position?: "center" | "left" | "right";
-};
-
-type ChatResponse = {
-  sessionId: string;
-  state: string;
-  reply: string;
-};
-
-type ContextId = "system" | "browser" | "files" | "notes";
-
-type ContextItem = {
-  id: ContextId;
-  label: string;
-  description: string;
-  enabled: boolean;
-};
-
-function uid() {
-  return Math.random().toString(36).slice(2) + Date.now().toString(36);
+// Allow vendor-specific WebKit property in inline styles
+interface CSSPropertiesWithWebkit extends React.CSSProperties {
+  WebkitTextSecurity?: string;
 }
-
-const CONTEXTS: ContextItem[] = [
-  {
-    id: "system",
-    label: "System",
-    description: "Onboarding, account and AI providers",
-    enabled: true,
-  },
-  {
-    id: "browser",
-    label: "Browser",
-    description: "Current page: read, summarize, save",
-    enabled: false,
-  },
-  {
-    id: "files",
-    label: "Files",
-    description: "Workspace and files",
-    enabled: false,
-  },
-  {
-    id: "notes",
-    label: "Notes",
-    description: "Knowledge base",
-    enabled: false,
-  },
-];
 
 export default function CuriosChat() {
   const API_BASE = "http://localhost:8787";
@@ -65,6 +23,7 @@ export default function CuriosChat() {
   );
   const isLight = theme === "light";
   const [ curiosLogo, setCuriosLogo ] = useState<string>(isLight ? curiosLogoWhiteUrl : curiosLogoDarkUrl);
+  const [ maskInput, setMaskInput ] = useState<boolean>(false);
 
   useEffect(() => {
     setCuriosLogo(isLight ? curiosLogoWhiteUrl : curiosLogoDarkUrl);
@@ -83,7 +42,7 @@ export default function CuriosChat() {
     {
       id: uid(),
       role: "assistant",
-      text: <>Welcome to CuriOS. Do you want to <strong>create an account, sign in or continue as a guest?</strong></>,
+      text: <>Welcome to CuriOS. Do you want to <strong>Signup, Signin in or continue as a guest?</strong></>,
     },
   ]);
   const [input, setInput] = useState("");
@@ -92,7 +51,7 @@ export default function CuriosChat() {
 
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
-  const ui = {
+  const ui: Ui = {
     app: isLight ? "bg-white text-neutral-900" : "bg-neutral-950 text-neutral-100",
     border: isLight ? "border-neutral-200" : "border-neutral-800",
     panel: isLight ? "bg-white" : "bg-neutral-950",
@@ -130,7 +89,10 @@ export default function CuriosChat() {
   }, []);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    const el = bottomRef.current as unknown as { scrollIntoView?: (opts?: any) => void } | null;
+    if (el && typeof el.scrollIntoView === "function") {
+      el.scrollIntoView({ behavior: "smooth", block: "end" });
+    }
   }, [messages, isSending]);
 
   useEffect(() => {
@@ -154,7 +116,7 @@ export default function CuriosChat() {
     setInput("");
     setIsSending(true);
 
-    const userMsg: Msg = { id: uid(), role: "user", text };
+    const userMsg: Msg = { id: uid(), role: "user", text, messageType: maskInput ? "secret" : "text" };
     setMessages((prev) => [...prev, userMsg]);
 
     try {
@@ -175,6 +137,7 @@ export default function CuriosChat() {
       }
 
       const data = (await res.json()) as ChatResponse;
+      data.chatType === "secret" ? setMaskInput(true) : setMaskInput(false);
       setState(data.state);
 
       const botMsg: Msg = { id: uid(), role: "assistant", text: data.reply };
@@ -310,7 +273,7 @@ export default function CuriosChat() {
           >
             <div className="space-y-4">
               {messages.map((m) => (
-                <MessageBubble key={m.id} role={m.role} text={m.text} ui={ui} position={m.position} />
+                <MessageBubble key={m.id} role={m.role} text={m.text} ui={ui} position={m.position} messageType={m.messageType} />
               ))}
 
               {isSending && (
@@ -347,6 +310,7 @@ export default function CuriosChat() {
                       send();
                     }
                   }}
+                  style={maskInput ? ({ WebkitTextSecurity: "disc" } as CSSPropertiesWithWebkit) : undefined}
                 />
                 <div className="flex items-center justify-between px-3 pb-1 pt-2">
                   <div className="text-[11px] text-neutral-500">
@@ -396,147 +360,6 @@ export default function CuriosChat() {
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-function SidebarHeader({
-  onReset,
-  onClose,
-}: {
-  onReset: () => void;
-  onClose?: () => void;
-}) {
-  return (
-    <div className="border-b border-neutral-200 dark:border-neutral-800 p-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div>
-            <img className="h-10 w-10 rounded-2xl bg-neutral-200 dark:bg-neutral-800" src={curiosLogoWhiteUrl} alt="CuriOS logo" />
-          </div>
-          <div className="leading-tight">
-            <div className="text-sm font-semibold">CuriOS</div>
-            <div className="text-xs text-neutral-400">contexts</div>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {onClose && (
-            <button
-              onClick={onClose}
-              className="rounded-lg border border-neutral-200 px-3 py-1.5 text-xs hover:bg-neutral-100 dark:border-neutral-800 dark:hover:bg-neutral-900"
-            >
-              Close
-            </button>
-          )}
-          <button
-            onClick={onReset}
-            className="rounded-lg border border-neutral-200 px-3 py-1.5 text-xs hover:bg-neutral-100 dark:border-neutral-800 dark:hover:bg-neutral-900"
-            title="Restart local session"
-          >
-            Reset
-          </button>
-        </div>
-      </div>
-
-      <div className="mt-3 text-xs text-neutral-300">
-        Context: You are now on <span className="text-neutral-500 dark:text-neutral-300">System</span>.
-      </div>
-    </div>
-  );
-}
-
-function ContextList({
-  activeContext,
-  onSelect,
-  ui,
-}: {
-  activeContext: ContextId;
-  onSelect: (id: ContextId) => void;
-  ui: ReturnType<typeof buildUiStub>;
-}) {
-  return (
-    <nav className="p-2">
-      <div className="px-2 pb-2 pt-3 text-[11px] uppercase tracking-wider text-neutral-500">
-        Contexts
-      </div>
-      <div className="space-y-1">
-        {CONTEXTS.map((c) => {
-          const active = c.id === activeContext;
-          return (
-            <button
-              key={c.id}
-              onClick={() => c.enabled && onSelect(c.id)}
-              disabled={!c.enabled}
-              className={[
-                "w-full rounded-xl px-3 py-3 text-left transition",
-                active ? `border ${ui.border} ${ui.card}` : `border border-transparent ${ui.hoverSoft}`,
-                !c.enabled ? "opacity-40 cursor-not-allowed" : "",
-              ].join(" ")}
-            >
-              <div className="flex items-center justify-between">
-                <div className="text-sm font-semibold">{c.label}</div>
-                <span className={["rounded-full px-2 py-0.5 text-[10px]", c.enabled ? ui.badgeEnabled : ui.badgeDisabled].join(" ")}>
-                  {c.enabled ? (active ? "Active" : "Available") : "Coming soon"}
-                </span>
-              </div>
-              <div className="mt-1 text-xs text-neutral-500">{c.description}</div>
-            </button>
-          );
-        })}
-      </div>
-    </nav>
-  );
-}
-
-// Helper to satisfy TS prop typing without exporting ui creator
-function buildUiStub() {
-  return {
-    app: "",
-    border: "",
-    panel: "",
-    card: "",
-    hoverPanel: "",
-    hoverSoft: "",
-    topbarBg: "",
-    assistantBubble: "",
-    userBubble: "",
-    badgeEnabled: "",
-    badgeDisabled: "",
-    sendBtn: "",
-  };
-}
-
-function MessageBubble({
-  role,
-  text,
-  ui,
-  position,
-}: {
-  role: "user" | "assistant";
-  text: React.ReactNode | string;
-  ui: ReturnType<typeof buildUiStub>;
-  position?: "center" | "left" | "right";
-}) {
-  const isUser = role === "user";
-  if (position === "center") {
-    return (
-      <div className="flex justify-center">
-        <div>
-          {typeof text === "string" ? <div dangerouslySetInnerHTML={{ __html: text }} /> : text}
-        </div>
-      </div>
-    );
-  }
-  return (
-    <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
-      <div
-        className={[
-          "max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm leading-relaxed",
-          isUser ? ui.userBubble : ui.assistantBubble,
-        ].join(" ")}
-      >
-        {typeof text === "string" ? <div dangerouslySetInnerHTML={{ __html: text }} /> : text}
-      </div>
     </div>
   );
 }
