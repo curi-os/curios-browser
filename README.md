@@ -33,6 +33,16 @@ cd curios-browser
 yarn install
 ```
 
+## Supabase setup (optional)
+
+Some features (auth/session) require Supabase.
+
+- Copy `.env.example` to `.env.local` (recommended) or `.env`
+- Set:
+	- `REACT_APP_SUPABASE_URL` (must be a valid `http(s)` URL, usually `https://<project-ref>.supabase.co`)
+	- `REACT_APP_SUPABASE_ANON_KEY`
+- Restart `yarn start` after changing env vars (Create React App only reads them at startup)
+
 ## Available Scripts
 
 In the project directory, you can run:

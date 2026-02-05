@@ -6,7 +6,8 @@ import ContextList from "./ContextList";
 import MessageBubble from "./MessageBubble";
 import { uid } from "./utils";
 import { CONTEXTS } from "./contexts";
-import type { Msg, ChatResponse, ContextId, Ui } from "./types";
+import type { Msg, ChatResponse, ContextId, SessionResponse, Ui } from "./types";
+import { useAuth } from "../../auth/useAuth";
 
 // Allow vendor-specific WebKit property in inline styles
 interface CSSPropertiesWithWebkit extends React.CSSProperties {
@@ -14,7 +15,9 @@ interface CSSPropertiesWithWebkit extends React.CSSProperties {
 }
 
 export default function CuriosChat() {
-  const API_BASE = "http://localhost:8787";
+  const API_BASE = (process.env.REACT_APP_API_BASE as string) || "http://localhost:8787";
+
+  const { loading: authLoading, user, session, supabaseAvailable, signOut } = useAuth();
 
   const [activeContext, setActiveContext] = useState<ContextId>("system");
   const activeContextMeta = CONTEXTS.find((c) => c.id === activeContext)!;
@@ -31,6 +34,24 @@ export default function CuriosChat() {
 
   // Keep a stable id for the logo message
   const logoMsgIdRef = useRef<string>(uid());
+  // Keep a stable id for the initial assistant greeting message
+  const greetingMsgIdRef = useRef<string>(uid());
+
+  function renderGreeting(opts: { loggedIn: boolean; userLabel?: string }) {
+    if (opts.loggedIn) {
+      return (
+        <>
+          You are signed in{opts.userLabel ? <> as <strong>{opts.userLabel}</strong></> : null}. What can I do for you?
+        </>
+      );
+    }
+
+    return (
+      <>
+        Welcome to CuriOS. Do you want to <strong>Signup, Signin in or continue as a guest?</strong>
+      </>
+    );
+  }
 
   const [messages, setMessages] = useState<Msg[]>([
     {
@@ -40,14 +61,15 @@ export default function CuriosChat() {
       position: "center"
     },
     {
-      id: uid(),
+      id: greetingMsgIdRef.current,
       role: "assistant",
-      text: <>Welcome to CuriOS. Do you want to <strong>Signup, Signin in or continue as a guest?</strong></>,
+      text: supabaseAvailable && authLoading
+        ? "Checking your session…"
+        : renderGreeting({ loggedIn: Boolean(user), userLabel: user?.email ?? user?.id }),
     },
   ]);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
-  const [state, setState] = useState<string>("WELCOME");
 
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
@@ -78,14 +100,92 @@ export default function CuriosChat() {
   const composerRef = useRef<HTMLDivElement | null>(null);
   const [composerHeight, setComposerHeight] = useState(0);
 
-  const sessionId = useMemo(() => {
+  const [sessionId, setSessionId] = useState<string>(() => {
     const key = "curios.sessionId";
-    let s = localStorage.getItem(key);
-    if (!s) {
-      s = `web-${uid()}`;
-      localStorage.setItem(key, s);
+    const s = localStorage.getItem(key);
+    return s || `web-${uid()}`;
+  });
+
+  const [serverState, setServerState] = useState<string | null>(null);
+  const [serverUser, setServerUser] = useState<SessionResponse["user"]>(null);
+  const [providerConfigured, setProviderConfigured] = useState<boolean>(false);
+  const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
+  const [sessionLoading, setSessionLoading] = useState<boolean>(true);
+  const [sessionError, setSessionError] = useState<string | null>(null);
+
+  // Bootstrap session/state from the server on first load.
+  // Note: React 18 StrictMode re-runs effects in development; do not use a
+  // one-shot ref guard here or the first (aborted) fetch would be the only one.
+  useEffect(() => {
+    const controller = new AbortController();
+    let isActive = true;
+
+    async function bootstrap() {
+      setSessionLoading(true);
+      setSessionError(null);
+
+      try {
+        const headers: Record<string, string> = {
+          "content-type": "application/json",
+          "x-session-id": sessionId,
+        };
+
+        if (user) {
+          headers["x-curios-user"] = user.email ?? user.id;
+        }
+
+        if (session?.access_token) {
+          headers.Authorization = `Bearer ${session.access_token}`;
+        }
+
+        const res = await fetch(`${API_BASE}/session`, {
+          method: "GET",
+          headers,
+          // If your Fastify route sets a cookie on first hit, this is required.
+          credentials: "include",
+          signal: controller.signal,
+        });
+
+        if (!res.ok) {
+          const errText = await res.text().catch(() => "");
+          throw new Error(`HTTP ${res.status}: ${errText}`);
+        }
+
+        const data = (await res.json()) as SessionResponse;
+        if (!data.ok || !data.sessionId) {
+          throw new Error("Invalid /session response");
+        }
+        setServerState(data.state);
+        setServerUser(data.user);
+        setProviderConfigured(Boolean(data.providerConfigured));
+        setSelectedProvider(data.selectedProvider ?? null);
+        setMaskInput(data.chatType === "secret");
+
+        // Keep localStorage and headers aligned with server session id.
+        setSessionId(data.sessionId);
+        localStorage.setItem("curios.sessionId", data.sessionId);
+      } catch (e: any) {
+        // Abort is expected on unmount / StrictMode effect cleanup.
+        if (e?.name === "AbortError") return;
+        console.log("Failed to load session:", e);
+        if (!isActive) return;
+        setSessionError(e?.message || "Failed to load session");
+        setServerState(null);
+        setServerUser(null);
+        setProviderConfigured(false);
+        setSelectedProvider(null);
+      } finally {
+        if (isActive) setSessionLoading(false);
+      }
     }
-    return s;
+
+    bootstrap();
+    return () => {
+      isActive = false;
+      controller.abort();
+    };
+    // Intentionally omit deps: we only want a bootstrap on initial mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -109,9 +209,26 @@ export default function CuriosChat() {
     localStorage.setItem("curios.theme", theme);
   }, [theme]);
 
+  // When auth resolves, ensure the first assistant message + state reflect the login status.
+  useEffect(() => {
+    if (!supabaseAvailable) return;
+    if (authLoading) return;
+
+    const loggedIn = Boolean(user);
+    const userLabel = user?.email ?? user?.id;
+
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === greetingMsgIdRef.current
+          ? { ...m, text: renderGreeting({ loggedIn, userLabel }) }
+          : m
+      )
+    );
+  }, [supabaseAvailable, authLoading, user?.id, user?.email]);
+
   async function send() {
     const text = input.trim();
-    if (!text || isSending) return;
+    if (!text || isSending || sessionLoading) return;
 
     setInput("");
     setIsSending(true);
@@ -120,15 +237,28 @@ export default function CuriosChat() {
     setMessages((prev) => [...prev, userMsg]);
 
     try {
+      const headers: Record<string, string> = {
+        "content-type": "application/json",
+        "x-session-id": sessionId,
+        // (future) you can send the context to the backend:
+        "x-curios-context": activeContext,
+        // Helps the backend start in the right state when logged in.
+        //"x-curios-state": effectiveState,
+      };
+
+      if (user) {
+        headers["x-curios-user"] = user.email ?? user.id;
+      }
+
+      if (session?.access_token) {
+        headers.Authorization = `Bearer ${session.access_token}`;
+      }
+
       const res = await fetch(`${API_BASE}/chat`, {
         method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-session-id": sessionId,
-          // (future) you can send the context to the backend:
-          "x-curios-context": activeContext,
-        },
+        headers,
         body: JSON.stringify({ message: text }),
+        credentials: "include",
       });
 
       if (!res.ok) {
@@ -138,7 +268,13 @@ export default function CuriosChat() {
 
       const data = (await res.json()) as ChatResponse;
       data.chatType === "secret" ? setMaskInput(true) : setMaskInput(false);
-      setState(data.state);
+
+      // If backend rotates session IDs, keep us in sync.
+      if (data.sessionId && data.sessionId !== sessionId) {
+        setSessionId(data.sessionId);
+        localStorage.setItem("curios.sessionId", data.sessionId);
+      }
+      if (data.state) setServerState(data.state);
 
       const botMsg: Msg = { id: uid(), role: "assistant", text: data.reply };
       setMessages((prev) => [...prev, botMsg]);
@@ -209,7 +345,9 @@ export default function CuriosChat() {
                   <div className="truncate text-sm font-semibold">CuriOS</div>
                   <div className="truncate text-xs text-neutral-400">
                     context: {activeContextMeta.label} <br />
-                    state: {state}
+                    state: {serverState}
+                    {selectedProvider ? <><br />provider: {selectedProvider}</> : null}
+                    {!providerConfigured ? <><br />provider configured: no</> : null}
                   </div>
                 </div>
               </div>
@@ -218,6 +356,28 @@ export default function CuriosChat() {
                 <span className="hidden text-xs text-neutral-500 sm:inline">
                   {activeContextMeta.description}
                 </span>
+
+                {supabaseAvailable && (
+                  <div className="hidden items-center gap-2 sm:flex">
+                    <span className="text-xs text-neutral-500">
+                      {authLoading
+                        ? "auth…"
+                        : user?.email
+                        ? `Signed in: ${user.email}`
+                        : "Guest"}
+                    </span>
+                    {user && (
+                      <button
+                        className={`rounded-lg border ${ui.border} px-3 py-1.5 text-xs ${ui.hoverPanel}`}
+                        onClick={() => signOut()}
+                        title="Sign out"
+                      >
+                        Sign out
+                      </button>
+                    )}
+                  </div>
+                )}
+
                 <button
                   className={`rounded-lg border ${ui.border} px-3 py-1.5 text-xs ${ui.hoverPanel}`}
                   onClick={() => setTheme(isLight ? "dark" : "light")}
@@ -272,6 +432,16 @@ export default function CuriosChat() {
             style={{ paddingBottom: composerHeight + 16 }}
           >
             <div className="space-y-4">
+              {sessionError && (
+                <MessageBubble
+                  role="assistant"
+                  text={
+                    "Failed to load session from the server. You can still try chatting, but state may be inconsistent.\n\n" +
+                    `Details: ${sessionError}`
+                  }
+                  ui={ui}
+                />
+              )}
               {messages.map((m) => (
                 <MessageBubble key={m.id} role={m.role} text={m.text} ui={ui} position={m.position} messageType={m.messageType} />
               ))}
@@ -301,9 +471,10 @@ export default function CuriosChat() {
                 <textarea
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  placeholder="Type in natural language…"
+                  placeholder={sessionLoading ? "Loading your session…" : "Type in natural language…"}
                   className="max-h-40 w-full resize-none bg-transparent px-3 py-2 text-sm outline-none placeholder:text-neutral-500"
                   rows={2}
+                  disabled={sessionLoading}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();
@@ -318,7 +489,7 @@ export default function CuriosChat() {
                   </div>
                   <button
                     onClick={send}
-                    disabled={isSending || !input.trim()}
+                    disabled={sessionLoading || isSending || !input.trim()}
                     className={`rounded-xl px-4 py-2 text-xs font-semibold ${ui.sendBtn} disabled:opacity-40`}
                   >
                     Send

@@ -15,6 +15,19 @@ export type ChatResponse = {
   reply: string;
 };
 
+export type SessionResponse = {
+  ok: boolean;
+  sessionId: string;
+  state: string;
+  chatType: "text" | "secret";
+  user: null | {
+    userId: string;
+    email?: string;
+  };
+  providerConfigured: boolean;
+  selectedProvider: string | null;
+};
+
 export type ContextId = "system" | "browser" | "files" | "notes";
 
 export type ContextItem = {
