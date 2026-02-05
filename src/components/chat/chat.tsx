@@ -213,8 +213,7 @@ export default function CuriosChat() {
   useEffect(() => {
     if (!supabaseAvailable) return;
     if (authLoading) return;
-
-    const loggedIn = Boolean(user);
+    const loggedIn = Boolean(user || serverUser);
     const userLabel = user?.email ?? user?.id;
 
     setMessages((prev) =>
@@ -224,7 +223,7 @@ export default function CuriosChat() {
           : m
       )
     );
-  }, [supabaseAvailable, authLoading, user?.id, user?.email]);
+  }, [supabaseAvailable, authLoading, user, serverUser ]);
 
   async function send() {
     const text = input.trim();
@@ -241,9 +240,7 @@ export default function CuriosChat() {
         "content-type": "application/json",
         "x-session-id": sessionId,
         // (future) you can send the context to the backend:
-        "x-curios-context": activeContext,
-        // Helps the backend start in the right state when logged in.
-        //"x-curios-state": effectiveState,
+        "x-curios-context": activeContext
       };
 
       if (user) {
@@ -295,6 +292,12 @@ export default function CuriosChat() {
   function resetSession() {
     localStorage.removeItem("curios.sessionId");
     window.location.reload();
+  }
+
+  function onSignOut() {
+    signOut();
+    // Optionally, you can also reset the session on the server or perform other cleanup here.
+    resetSession();
   }
 
   // Update the logo message when the theme/logo source changes
@@ -362,14 +365,14 @@ export default function CuriosChat() {
                     <span className="text-xs text-neutral-500">
                       {authLoading
                         ? "auth…"
-                        : user?.email
-                        ? `Signed in: ${user.email}`
+                        : user?.email || serverUser?.email
+                        ? `Signed in: ${user?.email || serverUser?.email}`
                         : "Guest"}
                     </span>
-                    {user && (
+                    {(user || serverUser) && (
                       <button
                         className={`rounded-lg border ${ui.border} px-3 py-1.5 text-xs ${ui.hoverPanel}`}
-                        onClick={() => signOut()}
+                        onClick={onSignOut}
                         title="Sign out"
                       >
                         Sign out
