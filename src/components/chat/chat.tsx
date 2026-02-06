@@ -103,7 +103,10 @@ export default function CuriosChat() {
   const [sessionId, setSessionId] = useState<string>(() => {
     const key = "curios.sessionId";
     const s = localStorage.getItem(key);
-    return s || `web-${uid()}`;
+    const next = s || `web-${uid()}`;
+    // Ensure a newly generated session id survives page refresh.
+    if (!s) localStorage.setItem(key, next);
+    return next;
   });
 
   // Keep the latest session id available to effects without forcing them to
@@ -305,6 +308,10 @@ export default function CuriosChat() {
   useEffect(() => {
     localStorage.setItem("curios.theme", theme);
   }, [theme]);
+
+  useEffect(() => {
+    localStorage.setItem("curios.sessionId", sessionId);
+  }, [sessionId]);
 
   // When auth resolves, ensure the first assistant message + state reflect the login status.
   useEffect(() => {
