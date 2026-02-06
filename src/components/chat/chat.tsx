@@ -106,6 +106,13 @@ export default function CuriosChat() {
     return s || `web-${uid()}`;
   });
 
+  // Keep the latest session id available to effects without forcing them to
+  // depend on (and re-run on) sessionId changes.
+  const sessionIdRef = useRef<string>(sessionId);
+  useEffect(() => {
+    sessionIdRef.current = sessionId;
+  }, [sessionId]);
+
   const [serverState, setServerState] = useState<string | null>(null);
   const [serverUser, setServerUser] = useState<SessionResponse["user"]>(null);
   const [providerConfigured, setProviderConfigured] = useState<boolean>(false);
@@ -113,80 +120,170 @@ export default function CuriosChat() {
   const [sessionLoading, setSessionLoading] = useState<boolean>(true);
   const [sessionError, setSessionError] = useState<string | null>(null);
 
-  // Bootstrap session/state from the server on first load.
-  // Note: React 18 StrictMode re-runs effects in development; do not use a
-  // one-shot ref guard here or the first (aborted) fetch would be the only one.
+  const serverStateRef = useRef<string | null>(serverState);
   useEffect(() => {
-    const controller = new AbortController();
-    let isActive = true;
+    serverStateRef.current = serverState;
+  }, [serverState]);
 
-    async function bootstrap() {
-      setSessionLoading(true);
-      setSessionError(null);
+  // Re-fetch /session when the Supabase auth session changes.
+  // This keeps the backend identity (serverUser) in sync without requiring a full refresh.
+  const lastSeenAccessTokenRef = useRef<string | null>(null);
 
-      try {
-        const headers: Record<string, string> = {
-          "content-type": "application/json",
-          "x-session-id": sessionId,
-        };
+  const sessionSyncTimeoutRef = useRef<number | null>(null);
+  function clearSessionSyncTimeout() {
+    if (sessionSyncTimeoutRef.current !== null) {
+      window.clearTimeout(sessionSyncTimeoutRef.current);
+      sessionSyncTimeoutRef.current = null;
+    }
+  }
 
-        if (user) {
-          headers["x-curios-user"] = user.email ?? user.id;
-        }
+  async function refreshServerSession(opts?: { reason?: string; setBusy?: boolean }): Promise<SessionResponse | null> {
+    const setBusy = opts?.setBusy !== false;
+    if (setBusy) setSessionLoading(true);
+    if (setBusy) setSessionError(null);
 
-        if (session?.access_token) {
-          headers.Authorization = `Bearer ${session.access_token}`;
-        }
+    try {
+      const headers: Record<string, string> = {
+        "content-type": "application/json",
+        "x-session-id": sessionIdRef.current,
+      };
 
-        const res = await fetch(`${API_BASE}/session`, {
-          method: "GET",
-          headers,
-          // If your Fastify route sets a cookie on first hit, this is required.
-          credentials: "include",
-          signal: controller.signal,
-        });
+      if (user) {
+        headers["x-curios-user"] = user.email ?? user.id;
+      }
 
-        if (!res.ok) {
-          const errText = await res.text().catch(() => "");
-          throw new Error(`HTTP ${res.status}: ${errText}`);
-        }
+      if (session?.access_token) {
+        headers.Authorization = `Bearer ${session.access_token}`;
+      }
 
-        const data = (await res.json()) as SessionResponse;
-        if (!data.ok || !data.sessionId) {
-          throw new Error("Invalid /session response");
-        }
-        setServerState(data.state);
-        setServerUser(data.user);
-        setProviderConfigured(Boolean(data.providerConfigured));
-        setSelectedProvider(data.selectedProvider ?? null);
-        setMaskInput(data.chatType === "secret");
+      const res = await fetch(`${API_BASE}/session`, {
+        method: "GET",
+        headers,
+        credentials: "include",
+      });
 
-        // Keep localStorage and headers aligned with server session id.
+      if (!res.ok) {
+        const errText = await res.text().catch(() => "");
+        throw new Error(`HTTP ${res.status}: ${errText}`);
+      }
+
+      const data = (await res.json()) as SessionResponse;
+      if (!data.ok || !data.sessionId) {
+        throw new Error("Invalid /session response");
+      }
+
+      setServerState(data.state);
+      setServerUser(data.user);
+      setProviderConfigured(Boolean(data.providerConfigured));
+      setSelectedProvider(data.selectedProvider ?? null);
+      setMaskInput(data.chatType === "secret");
+
+      // Keep localStorage and headers aligned with server session id.
+      if (data.sessionId !== sessionIdRef.current) {
+        sessionIdRef.current = data.sessionId;
         setSessionId(data.sessionId);
         localStorage.setItem("curios.sessionId", data.sessionId);
-      } catch (e: any) {
-        // Abort is expected on unmount / StrictMode effect cleanup.
-        if (e?.name === "AbortError") return;
-        console.log("Failed to load session:", e);
-        if (!isActive) return;
-        setSessionError(e?.message || "Failed to load session");
-        setServerState(null);
-        setServerUser(null);
-        setProviderConfigured(false);
-        setSelectedProvider(null);
-      } finally {
-        if (isActive) setSessionLoading(false);
       }
-    }
 
-    bootstrap();
+      return data;
+    } catch (e: any) {
+      console.log("Failed to load session:", e, opts?.reason ? { reason: opts.reason } : undefined);
+      setSessionError(e?.message || "Failed to load session");
+      setServerState(null);
+      setServerUser(null);
+      setProviderConfigured(false);
+      setSelectedProvider(null);
+      return null;
+    } finally {
+      if (setBusy) setSessionLoading(false);
+    }
+  }
+
+  async function syncServerSession(opts: { reason: string; attempts?: number; delayMs?: number }) {
+    clearSessionSyncTimeout();
+
+    const attempts = opts.attempts ?? 5;
+    const delayMs = opts.delayMs ?? 350;
+
+    const data = await refreshServerSession({ reason: opts.reason, setBusy: false });
+
+    const hasAuth = Boolean(session?.access_token || user);
+    const serverHasUser = Boolean(data?.user);
+
+    // If the user is authenticated client-side but the server hasn't attached the user
+    // to the session yet, retry a few times (eventual consistency / async linkage).
+    if (hasAuth && !serverHasUser && attempts > 1) {
+      sessionSyncTimeoutRef.current = window.setTimeout(() => {
+        syncServerSession({
+          reason: `${opts.reason}:retry`,
+          attempts: attempts - 1,
+          delayMs: Math.min(Math.round(delayMs * 1.5), 2000),
+        });
+      }, delayMs);
+    }
+  }
+
+  useEffect(() => {
     return () => {
-      isActive = false;
-      controller.abort();
+      clearSessionSyncTimeout();
     };
-    // Intentionally omit deps: we only want a bootstrap on initial mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Single source of truth for identity in the UI.
+  // Prefer the backend-provided user (validated on /session) when available.
+  const effectiveUser = useMemo(() => {
+    // Once the backend session has loaded, it becomes the authority.
+    // This prevents a stale Supabase session from making the UI look signed-in
+    // when the backend considers the session a guest.
+    if (!sessionLoading) {
+      if (!serverUser) return null;
+      return {
+        id: serverUser.userId,
+        email: serverUser.email,
+        source: "server" as const,
+      };
+    }
+
+    // While the backend session is still loading, fall back to Supabase.
+    if (user) {
+      return {
+        id: user.id,
+        email: user.email ?? undefined,
+        source: "supabase" as const,
+      };
+    }
+    return null;
+  }, [serverUser, user, sessionLoading]);
+
+  const effectiveUserLabel = effectiveUser?.email ?? effectiveUser?.id;
+
+  // Bootstrap session/state from the server on first load.
+  // Note: React 18 StrictMode re-runs effects in development.
+  useEffect(() => {
+    refreshServerSession({ reason: "mount", setBusy: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [API_BASE]);
+
+  // When a user signs in (or the access token changes), re-fetch /session so the
+  // backend can associate the current sessionId with the authenticated user.
+  useEffect(() => {
+    if (!supabaseAvailable) return;
+    if (authLoading) return;
+
+    const token = session?.access_token ?? null;
+    // Only refresh when the token actually changes; avoid extra calls.
+    if (token === lastSeenAccessTokenRef.current) return;
+    lastSeenAccessTokenRef.current = token;
+
+    // If token is null (signed out), still refresh once so the UI becomes guest.
+    if (!token) {
+      refreshServerSession({ reason: "signed-out", setBusy: false });
+      return;
+    }
+
+    syncServerSession({ reason: "auth-token-changed" });
+  }, [supabaseAvailable, authLoading, session?.access_token]);
 
   useEffect(() => {
     const el = bottomRef.current as unknown as { scrollIntoView?: (opts?: any) => void } | null;
@@ -211,10 +308,11 @@ export default function CuriosChat() {
 
   // When auth resolves, ensure the first assistant message + state reflect the login status.
   useEffect(() => {
-    if (!supabaseAvailable) return;
-    if (authLoading) return;
-    const loggedIn = Boolean(user || serverUser);
-    const userLabel = user?.email ?? user?.id;
+    // If Supabase exists, wait until it finishes resolving.
+    // If it doesn't, rely purely on the backend session user.
+    if (supabaseAvailable && authLoading) return;
+    const loggedIn = Boolean(effectiveUser);
+    const userLabel = effectiveUserLabel;
 
     setMessages((prev) =>
       prev.map((m) =>
@@ -223,7 +321,7 @@ export default function CuriosChat() {
           : m
       )
     );
-  }, [supabaseAvailable, authLoading, user, serverUser ]);
+  }, [supabaseAvailable, authLoading, effectiveUser, effectiveUserLabel]);
 
   async function send() {
     const text = input.trim();
@@ -243,8 +341,8 @@ export default function CuriosChat() {
         "x-curios-context": activeContext
       };
 
-      if (user) {
-        headers["x-curios-user"] = user.email ?? user.id;
+      if (effectiveUserLabel) {
+        headers["x-curios-user"] = effectiveUserLabel;
       }
 
       if (session?.access_token) {
@@ -268,10 +366,19 @@ export default function CuriosChat() {
 
       // If backend rotates session IDs, keep us in sync.
       if (data.sessionId && data.sessionId !== sessionId) {
+        sessionIdRef.current = data.sessionId;
         setSessionId(data.sessionId);
         localStorage.setItem("curios.sessionId", data.sessionId);
       }
+
+      const prevState = serverStateRef.current;
       if (data.state) setServerState(data.state);
+
+      // If the backend state machine advanced (e.g. successful signin/signup),
+      // immediately re-fetch /session so serverUser/providerConfigured update without reload.
+      if (data.state && data.state !== prevState) {
+        syncServerSession({ reason: `post-chat-state-change:${data.state}` });
+      }
 
       const botMsg: Msg = { id: uid(), role: "assistant", text: data.reply };
       setMessages((prev) => [...prev, botMsg]);
@@ -365,11 +472,11 @@ export default function CuriosChat() {
                     <span className="text-xs text-neutral-500">
                       {authLoading
                         ? "auth…"
-                        : user?.email || serverUser?.email
-                        ? `Signed in: ${user?.email || serverUser?.email}`
+                        : effectiveUser
+                        ? `Signed in: ${effectiveUser.email ?? effectiveUser.id}`
                         : "Guest"}
                     </span>
-                    {(user || serverUser) && (
+                    {effectiveUser && (
                       <button
                         className={`rounded-lg border ${ui.border} px-3 py-1.5 text-xs ${ui.hoverPanel}`}
                         onClick={onSignOut}

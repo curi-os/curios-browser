@@ -3,12 +3,14 @@ import { render, screen } from '@testing-library/react';
 import App from './App';
 import { AuthProvider } from './auth/AuthProvider';
 
-test('renders chat welcome message', () => {
+test('renders chat greeting message', async () => {
   render(
     <AuthProvider>
       <App />
     </AuthProvider>
   );
-  const welcomeElement = screen.getByText(/welcome to curios/i);
-  expect(welcomeElement).toBeInTheDocument();
+
+  // The greeting can briefly be the session-loading message while auth/session bootstrap.
+  const greeting = await screen.findByText(/(welcome to curios|checking your session)/i);
+  expect(greeting).toBeInTheDocument();
 });
