@@ -2,10 +2,30 @@ import type { ReactNode } from "react";
 
 export type Msg = {
   id: string;
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "system";
+  // Display content (may be masked for secret messages).
   text: ReactNode | string;
+  // Raw content returned by the backend (kept in-memory; UI should hide secrets).
+  rawText?: string;
+  createdAt?: string;
   position?: "center" | "left" | "right";
   messageType?: "text" | "secret";
+};
+
+export type ServerMessage = {
+  role: "user" | "assistant" | "system";
+  content: string;
+  created_at: string;
+  dataInputType: "text" | "secret";
+};
+
+export type MessagesResponse = {
+  messages: ServerMessage[];
+  pageInfo: {
+    oldestCursor: string | null;
+    newestCursor: string | null;
+    hasMoreBefore: boolean;
+  };
 };
 
 export type ChatResponse = {

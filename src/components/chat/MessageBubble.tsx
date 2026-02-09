@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useMemo } from "react";
+import DOMPurify from "dompurify";
 import type { Ui } from "./types";
 
 export default function MessageBubble({
@@ -8,31 +9,33 @@ export default function MessageBubble({
   position,
   messageType = "text",
 }: {
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "system";
   text: React.ReactNode | string;
   ui: Ui;
   position?: "center" | "left" | "right";
   messageType?: "text" | "secret";
 }) {
   const isUser = role === "user";
+  const isSystem = role === "system";
   const isSecret = messageType === "secret";
-  const getTextLength = (node: React.ReactNode | string): number => {
-    if (node == null || typeof node === "boolean") return 0;
-    if (typeof node === "string") return node.length;
-    if (typeof node === "number") return String(node).length;
-    if (Array.isArray(node)) return node.reduce((sum, child) => sum + getTextLength(child), 0);
-    if (React.isValidElement<{ children?: React.ReactNode }>(node)) return getTextLength(node.props.children);
-    return 0;
-  };
 
-  const textWithType = isSecret ? "&bull;".repeat(getTextLength(text)) : text;
-  const finalText = typeof textWithType === "string" ? <div dangerouslySetInnerHTML={{ __html: textWithType }} /> : textWithType
+  const safeHtml = useMemo(() => {
+    if (isSecret) return null;
+    if (typeof text !== "string") return null;
+    return DOMPurify.sanitize(text, { USE_PROFILES: { html: true } });
+  }, [isSecret, text]);
 
-  if (position === "center") {
+  // For secret content, intentionally render a fixed mask (do not leak length).
+  const finalText: React.ReactNode | string = isSecret ? "••••••" : text;
+
+  const renderedText: React.ReactNode =
+    safeHtml != null ? <div dangerouslySetInnerHTML={{ __html: safeHtml }} /> : <>{finalText}</>;
+
+  if (position === "center" || isSystem) {
     return (
       <div className="flex justify-center">
-        <div>
-          {finalText}
+        <div className={isSystem ? "max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-2 text-xs text-neutral-500" : undefined}>
+          {renderedText}
         </div>
       </div>
     );
@@ -45,7 +48,7 @@ export default function MessageBubble({
           isUser ? ui.userBubble : ui.assistantBubble,
         ].join(" ")}
       >
-        {finalText}
+        {renderedText}
       </div>
     </div>
   );

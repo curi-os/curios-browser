@@ -6,7 +6,7 @@ import ContextList from "./ContextList";
 import MessageBubble from "./MessageBubble";
 import { uid } from "./utils";
 import { CONTEXTS } from "./contexts";
-import type { Msg, ChatResponse, ContextId, SessionResponse, Ui } from "./types";
+import type { Msg, ChatResponse, ContextId, MessagesResponse, ServerMessage, SessionResponse, Ui } from "./types";
 import { useAuth } from "../../auth/useAuth";
 
 // Allow vendor-specific WebKit property in inline styles
@@ -102,10 +102,15 @@ export default function CuriosChat() {
 
   const [sessionId, setSessionId] = useState<string>(() => {
     const key = "curios.sessionId";
-    const s = localStorage.getItem(key);
-    const next = s || `web-${uid()}`;
-    // Ensure a newly generated session id survives page refresh.
-    if (!s) localStorage.setItem(key, next);
+    const existing = localStorage.getItem(key);
+    if (existing) return existing;
+
+    const next =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `web-${uid()}`;
+
+    localStorage.setItem(key, next);
     return next;
   });
 
@@ -122,6 +127,68 @@ export default function CuriosChat() {
   const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
   const [sessionLoading, setSessionLoading] = useState<boolean>(true);
   const [sessionError, setSessionError] = useState<string | null>(null);
+
+  function normalizeSessionResponse(raw: any): SessionResponse {
+    const ok = Boolean(raw?.ok);
+    const sessionId = raw?.sessionId ?? raw?.session_id;
+    const state = raw?.state ?? raw?.sessionState ?? raw?.session_state;
+    const chatType = raw?.chatType ?? raw?.chat_type;
+    const user = raw?.user ?? null;
+
+    const providerConfiguredVal = raw?.providerConfigured ?? raw?.provider_configured;
+    const providerConfigured =
+      providerConfiguredVal === true ||
+      providerConfiguredVal === 1 ||
+      providerConfiguredVal === "true" ||
+      providerConfiguredVal === "1";
+
+    const selectedProvider =
+      raw?.selectedProvider ??
+      raw?.selected_provider ??
+      raw?.provider ??
+      raw?.aiProvider ??
+      raw?.ai_provider ??
+      raw?.user?.selectedProvider ??
+      raw?.user?.selected_provider ??
+      raw?.user?.provider ??
+      raw?.user?.aiProvider ??
+      raw?.user?.ai_provider ??
+      null;
+
+    const selectedProviderNormalized = typeof selectedProvider === "string" ? selectedProvider : null;
+    const providerConfiguredNormalized = providerConfigured || Boolean(selectedProviderNormalized);
+
+    return {
+      ok,
+      sessionId: typeof sessionId === "string" ? sessionId : "",
+      state: typeof state === "string" ? state : "",
+      chatType: chatType === "secret" ? "secret" : "text",
+      user: user && typeof user === "object" ? user : null,
+      providerConfigured: providerConfiguredNormalized,
+      selectedProvider: selectedProviderNormalized,
+    };
+  }
+
+  const [historyLoading, setHistoryLoading] = useState<boolean>(true);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [oldestCursor, setOldestCursor] = useState<string | null>(null);
+  const [newestCursor, setNewestCursor] = useState<string | null>(null);
+  const [hasMoreBefore, setHasMoreBefore] = useState<boolean>(false);
+  const [loadingOlder, setLoadingOlder] = useState<boolean>(false);
+
+  const oldestCursorRef = useRef<string | null>(null);
+  const newestCursorRef = useRef<string | null>(null);
+  const hasMoreBeforeRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    oldestCursorRef.current = oldestCursor;
+  }, [oldestCursor]);
+  useEffect(() => {
+    newestCursorRef.current = newestCursor;
+  }, [newestCursor]);
+  useEffect(() => {
+    hasMoreBeforeRef.current = hasMoreBefore;
+  }, [hasMoreBefore]);
 
   const serverStateRef = useRef<string | null>(serverState);
   useEffect(() => {
@@ -146,18 +213,7 @@ export default function CuriosChat() {
     if (setBusy) setSessionError(null);
 
     try {
-      const headers: Record<string, string> = {
-        "content-type": "application/json",
-        "x-session-id": sessionIdRef.current,
-      };
-
-      if (user) {
-        headers["x-curios-user"] = user.email ?? user.id;
-      }
-
-      if (session?.access_token) {
-        headers.Authorization = `Bearer ${session.access_token}`;
-      }
+      const headers: Record<string, string> = buildApiHeaders({ contentType: true });
 
       const res = await fetch(`${API_BASE}/session`, {
         method: "GET",
@@ -170,7 +226,8 @@ export default function CuriosChat() {
         throw new Error(`HTTP ${res.status}: ${errText}`);
       }
 
-      const data = (await res.json()) as SessionResponse;
+      const raw = await res.json();
+      const data = normalizeSessionResponse(raw);
       if (!data.ok || !data.sessionId) {
         throw new Error("Invalid /session response");
       }
@@ -199,6 +256,182 @@ export default function CuriosChat() {
       return null;
     } finally {
       if (setBusy) setSessionLoading(false);
+    }
+  }
+
+  function buildApiHeaders(opts?: { contentType?: boolean; extra?: Record<string, string> }) {
+    const headers: Record<string, string> = {};
+    if (opts?.contentType) headers["content-type"] = "application/json";
+    headers["X-Session-Id"] = sessionIdRef.current;
+
+    // Optional identity hints.
+    if (effectiveUserLabel) headers["x-curios-user"] = effectiveUserLabel;
+    if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+
+    if (opts?.extra) {
+      for (const [k, v] of Object.entries(opts.extra)) headers[k] = v;
+    }
+    return headers;
+  }
+
+  function splitStaticTop(prev: Msg[]) {
+    let i = 0;
+    while (i < prev.length) {
+      const id = prev[i].id;
+      if (id === logoMsgIdRef.current || id === greetingMsgIdRef.current) {
+        i += 1;
+        continue;
+      }
+      break;
+    }
+    return { top: prev.slice(0, i), rest: prev.slice(i) };
+  }
+
+  function mapServerMessageToUi(m: ServerMessage, index: number): Msg {
+    const isSecret = m.dataInputType === "secret";
+    return {
+      id: `${m.created_at}:${m.role}:${index}`,
+      role: m.role,
+      createdAt: m.created_at,
+      rawText: m.content,
+      text: isSecret ? "Hidden" : m.content,
+      messageType: m.dataInputType,
+      position: m.role === "system" ? "center" : undefined,
+    };
+  }
+
+  async function fetchMessages(params: { limit?: number; before?: string | null; after?: string | null }) {
+    const url = new URL(`${API_BASE}/messages`);
+    if (params.limit) url.searchParams.set("limit", String(params.limit));
+    if (params.before) url.searchParams.set("before", params.before);
+    if (params.after) url.searchParams.set("after", params.after);
+
+    const headers = buildApiHeaders({ contentType: false });
+    const res = await fetch(url.toString(), {
+      method: "GET",
+      headers,
+      credentials: "include",
+    });
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => "");
+      throw new Error(`HTTP ${res.status}: ${errText}`);
+    }
+
+    const data = (await res.json()) as MessagesResponse;
+    if (!data || !Array.isArray((data as any).messages) || !(data as any).pageInfo) {
+      throw new Error("Invalid /messages response");
+    }
+    return data;
+  }
+
+  function messageFingerprint(m: Msg): string | null {
+    if (m.id === logoMsgIdRef.current || m.id === greetingMsgIdRef.current) return null;
+    const raw = m.rawText ?? (typeof m.text === "string" ? m.text : null);
+    if (!raw) return null;
+    const createdAt = m.createdAt ?? "";
+    return `${createdAt}:${m.role}:${m.messageType ?? "text"}:${raw}`;
+  }
+
+  async function loadInitialHistory() {
+    setHistoryLoading(true);
+    setHistoryError(null);
+    try {
+      const data = await fetchMessages({ limit: 50 });
+      const mapped = data.messages.map(mapServerMessageToUi);
+
+      setOldestCursor(data.pageInfo.oldestCursor ?? null);
+      setNewestCursor(data.pageInfo.newestCursor ?? null);
+      setHasMoreBefore(Boolean(data.pageInfo.hasMoreBefore));
+
+      setMessages((prev) => {
+        // Keep logo at the top; keep greeting only when there is no history.
+        const logo = prev.find((m) => m.id === logoMsgIdRef.current);
+        const greeting = prev.find((m) => m.id === greetingMsgIdRef.current);
+        const next: Msg[] = [];
+        if (logo) next.push(logo);
+        if (mapped.length === 0 && greeting) next.push(greeting);
+        return [...next, ...mapped];
+      });
+    } catch (e: any) {
+      console.log("Failed to load message history:", e);
+      setHistoryError(e?.message || "Failed to load message history");
+      // Keep initial greeting/logo on failure.
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
+  async function loadOlderHistory() {
+    const before = oldestCursorRef.current;
+    if (!before) return;
+    if (!hasMoreBeforeRef.current) return;
+    if (loadingOlder) return;
+
+    setLoadingOlder(true);
+    try {
+      const scroller = scrollerRef.current;
+      const prevScrollHeight = scroller?.scrollHeight ?? 0;
+      const prevScrollTop = scroller?.scrollTop ?? 0;
+
+      const data = await fetchMessages({ limit: 50, before });
+      const mapped = data.messages.map(mapServerMessageToUi);
+
+      setOldestCursor(data.pageInfo.oldestCursor ?? null);
+      setHasMoreBefore(Boolean(data.pageInfo.hasMoreBefore));
+
+      setMessages((prev) => {
+        const { top, rest } = splitStaticTop(prev);
+        return [...top, ...mapped, ...rest];
+      });
+
+      // Keep scroll position stable after prepending.
+      requestAnimationFrame(() => {
+        const el = scrollerRef.current;
+        if (!el) return;
+        const nextScrollHeight = el.scrollHeight;
+        el.scrollTop = nextScrollHeight - prevScrollHeight + prevScrollTop;
+      });
+    } catch (e: any) {
+      console.log("Failed to load older messages:", e);
+    } finally {
+      setLoadingOlder(false);
+    }
+  }
+
+  async function refreshNewMessagesAfterCursor() {
+    const after = newestCursorRef.current;
+    if (!after) return;
+
+    try {
+      const data = await fetchMessages({ after });
+      if (!data.messages.length) {
+        setNewestCursor(data.pageInfo.newestCursor ?? newestCursorRef.current);
+        return;
+      }
+
+      setNewestCursor(data.pageInfo.newestCursor ?? null);
+
+      setMessages((prev) => {
+        const fingerprints = new Set<string>();
+        for (const m of prev) {
+          const fp = messageFingerprint(m);
+          if (fp) fingerprints.add(fp);
+        }
+
+        const additions: Msg[] = [];
+        for (let i = 0; i < data.messages.length; i++) {
+          const uiMsg = mapServerMessageToUi(data.messages[i], i);
+          const fp = messageFingerprint(uiMsg);
+          if (fp && fingerprints.has(fp)) continue;
+          if (fp) fingerprints.add(fp);
+          additions.push(uiMsg);
+        }
+
+        return additions.length ? [...prev, ...additions] : prev;
+      });
+    } catch (e) {
+      // Best-effort; ignore.
     }
   }
 
@@ -264,7 +497,10 @@ export default function CuriosChat() {
   // Bootstrap session/state from the server on first load.
   // Note: React 18 StrictMode re-runs effects in development.
   useEffect(() => {
-    refreshServerSession({ reason: "mount", setBusy: true });
+    (async () => {
+      await refreshServerSession({ reason: "mount", setBusy: true });
+      await loadInitialHistory();
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [API_BASE]);
 
@@ -337,24 +573,23 @@ export default function CuriosChat() {
     setInput("");
     setIsSending(true);
 
-    const userMsg: Msg = { id: uid(), role: "user", text, messageType: maskInput ? "secret" : "text" };
+    const userMsg: Msg = {
+      id: uid(),
+      role: "user",
+      rawText: text,
+      text: maskInput ? "Hidden" : text,
+      messageType: maskInput ? "secret" : "text",
+    };
     setMessages((prev) => [...prev, userMsg]);
 
     try {
-      const headers: Record<string, string> = {
-        "content-type": "application/json",
-        "x-session-id": sessionId,
-        // (future) you can send the context to the backend:
-        "x-curios-context": activeContext
-      };
-
-      if (effectiveUserLabel) {
-        headers["x-curios-user"] = effectiveUserLabel;
-      }
-
-      if (session?.access_token) {
-        headers.Authorization = `Bearer ${session.access_token}`;
-      }
+      const headers: Record<string, string> = buildApiHeaders({
+        contentType: true,
+        extra: {
+          // (future) you can send the context to the backend:
+          "x-curios-context": activeContext,
+        },
+      });
 
       const res = await fetch(`${API_BASE}/chat`, {
         method: "POST",
@@ -389,6 +624,9 @@ export default function CuriosChat() {
 
       const botMsg: Msg = { id: uid(), role: "assistant", text: data.reply };
       setMessages((prev) => [...prev, botMsg]);
+
+      // Recommended: reconcile with server history (multi-tab/race conditions).
+      await refreshNewMessagesAfterCursor();
     } catch (e: any) {
       const botMsg: Msg = {
         id: uid(),
@@ -403,9 +641,42 @@ export default function CuriosChat() {
     }
   }
 
-  function resetSession() {
-    localStorage.removeItem("curios.sessionId");
-    window.location.reload();
+  async function resetSession() {
+    try {
+      const headers = buildApiHeaders({ contentType: false });
+      await fetch(`${API_BASE}/session`, {
+        method: "DELETE",
+        headers,
+        credentials: "include",
+      });
+    } catch {
+      // Best-effort.
+    }
+
+    // Rotate to a brand new session id.
+    const next =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `web-${uid()}`;
+    localStorage.setItem("curios.sessionId", next);
+    sessionIdRef.current = next;
+    setSessionId(next);
+
+    setOldestCursor(null);
+    setNewestCursor(null);
+    setHasMoreBefore(false);
+
+    setMessages((prev) => {
+      const logo = prev.find((m) => m.id === logoMsgIdRef.current);
+      const greeting = prev.find((m) => m.id === greetingMsgIdRef.current);
+      const nextMsgs: Msg[] = [];
+      if (logo) nextMsgs.push(logo);
+      if (greeting) nextMsgs.push(greeting);
+      return nextMsgs;
+    });
+
+    await refreshServerSession({ reason: "reset", setBusy: true });
+    await loadInitialHistory();
   }
 
   function onSignOut() {
@@ -424,6 +695,8 @@ export default function CuriosChat() {
       )
     );
   }, [curiosLogo]);
+
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
 
   return (
     <div className={`h-screen overflow-hidden ${ui.app}`}>
@@ -547,6 +820,16 @@ export default function CuriosChat() {
           <main
             className="mx-auto w-full max-w-4xl flex-1 overflow-y-auto px-4 pt-6"
             style={{ paddingBottom: composerHeight + 16 }}
+            ref={scrollerRef}
+            onScroll={() => {
+              const el = scrollerRef.current;
+              if (!el) return;
+              if (el.scrollTop > 120) return;
+              if (!hasMoreBeforeRef.current) return;
+              if (loadingOlder) return;
+              // Load older messages when user scrolls near the top.
+              loadOlderHistory();
+            }}
           >
             <div className="space-y-4">
               {sessionError && (
@@ -559,6 +842,31 @@ export default function CuriosChat() {
                   ui={ui}
                 />
               )}
+
+              {historyError && (
+                <MessageBubble
+                  role="assistant"
+                  text={
+                    "Failed to load message history. You can still chat, but previous messages may be missing.\n\n" +
+                    `Details: ${historyError}`
+                  }
+                  ui={ui}
+                />
+              )}
+
+              {hasMoreBefore && (
+                <div className="flex justify-center">
+                  <button
+                    className={`rounded-lg border ${ui.border} px-3 py-1.5 text-xs ${ui.hoverPanel} disabled:opacity-50`}
+                    onClick={loadOlderHistory}
+                    disabled={loadingOlder}
+                    title="Load older messages"
+                  >
+                    {loadingOlder ? "Loading…" : "Load older"}
+                  </button>
+                </div>
+              )}
+
               {messages.map((m) => (
                 <MessageBubble key={m.id} role={m.role} text={m.text} ui={ui} position={m.position} messageType={m.messageType} />
               ))}
@@ -588,10 +896,10 @@ export default function CuriosChat() {
                 <textarea
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  placeholder={sessionLoading ? "Loading your session…" : "Type in natural language…"}
+                  placeholder={sessionLoading || historyLoading ? "Loading your session…" : "Type in natural language…"}
                   className="max-h-40 w-full resize-none bg-transparent px-3 py-2 text-sm outline-none placeholder:text-neutral-500"
                   rows={2}
-                  disabled={sessionLoading}
+                  disabled={sessionLoading || historyLoading}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();
@@ -606,7 +914,7 @@ export default function CuriosChat() {
                   </div>
                   <button
                     onClick={send}
-                    disabled={sessionLoading || isSending || !input.trim()}
+                    disabled={sessionLoading || historyLoading || isSending || !input.trim()}
                     className={`rounded-xl px-4 py-2 text-xs font-semibold ${ui.sendBtn} disabled:opacity-40`}
                   >
                     Send
