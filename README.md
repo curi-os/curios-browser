@@ -1,26 +1,30 @@
 # Curios Browser
 
-**Curios** is an intelligent chat interface designed to help you interact with different contexts in your digital workspace. Think of it as your personal AI assistant that understands not just what you're asking, but where you're asking it from.
+**Curios Browser** is the front-end interface for **CuriOS**, a conversational operating system where all interactions happen through natural chat. This project serves as the browser component, providing the visual interface through which users interact with CuriOS via intelligent conversations.
 
 <img width="2880" height="1386" alt="FireShot Capture 009 - React App -  localhost" src="https://github.com/user-attachments/assets/05f9f9bf-0b63-429d-a329-887443b27e06" />
 
 
-## 🌟 What is Curios?
+## 🌟 What is Curios Browser?
 
-Curios Browser is a context-aware AI chat application that brings intelligence to your browsing, file management, and note-taking workflows. Unlike traditional chatbots that operate in isolation, Curios integrates with your current context to provide relevant, actionable assistance.
+Curios Browser is the front-end component of **CuriOS**, an operating system built entirely around conversational chat. Rather than clicking through menus and dialogs, users interact with their system through natural language conversations. 
 
-### Key Capabilities
+This browser interface is context-aware and adapts to what you're doing - whether you're browsing the web, managing files, taking notes, or configuring your system. Unlike traditional chatbots that operate in isolation, Curios Browser integrates with your current context to provide relevant, actionable assistance through the CuriOS backend.
 
-- **🖥️ Browser Context**: Interact with the current web page - read, summarize, and save content directly from your browser
-- **📁 Files Context**: Access and manage your workspace files with AI assistance
-- **📝 Notes Context**: Build and query your personal knowledge base
-- **🔐 System Management**: Configure AI providers, manage your account, and onboard seamlessly
+### Key Features
 
-Whether you're researching a topic, organizing files, or building a knowledge repository, Curios adapts to your current task and provides intelligent support tailored to your needs.
+As the front-end of CuriOS, this browser provides context-aware conversational interfaces for:
+
+- **🖥️ Browser Context**: Interact with web pages through chat - read, summarize, and save content conversationally
+- **📁 Files Context**: Access and manage your workspace files through natural language
+- **📝 Notes Context**: Build and query your personal knowledge base via conversation
+- **🔐 System Management**: Configure AI providers, manage your account, and complete onboarding through guided chat
+
+Whether you're researching a topic, organizing files, or building a knowledge repository, the Curios Browser adapts to your current task and provides intelligent support tailored to your needs - all through conversational interactions with CuriOS.
 
 ## 🚀 Technical Features
 
-This application is built with modern web technologies to ensure a fast, reliable, and maintainable codebase:
+This front-end application is built with modern web technologies to ensure a fast, reliable, and maintainable codebase:
 
 - **TypeScript** - Type-safe React development for robust code
 - **React 19** - Latest React features for optimal performance
@@ -65,7 +69,7 @@ Some features (auth/session) require Supabase.
 
 In the project directory, you can run:
 
-### `npm start`
+### `yarn start`
 
 Runs the app in the development mode.\
 Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
@@ -73,12 +77,12 @@ Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
 The page will reload if you make edits.\
 You will also see any lint errors in the console.
 
-### `npm test`
+### `yarn test`
 
 Launches the test runner in the interactive watch mode.\
 See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
 
-### `npm run build`
+### `yarn build`
 
 Builds the app for production to the `build` folder.\
 It correctly bundles React in production mode and optimizes the build for the best performance.
@@ -88,7 +92,7 @@ Your app is ready to be deployed!
 
 See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
 
-### `npm run eject`
+### `yarn eject`
 
 **Note: this is a one-way operation. Once you `eject`, you can’t go back!**
 
