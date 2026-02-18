@@ -1,17 +1,34 @@
-# curios-browser
+# Curios Browser
 
-A TypeScript React application built with Create React App, featuring Webpack, Yarn, Tailwind CSS, and Storybook.
+**Curios** is an intelligent chat interface designed to help you interact with different contexts in your digital workspace. Think of it as your personal AI assistant that understands not just what you're asking, but where you're asking it from.
 
 ![Hello World App](https://github.com/user-attachments/assets/0a9d9147-ea8a-47fb-acb7-241e3055c7fb)
 
-## 🚀 Features
+## 🌟 What is Curios?
 
-- **TypeScript** - Type-safe React development
-- **Tailwind CSS** - Utility-first CSS framework for rapid UI development
-- **Storybook** - Component development and documentation
+Curios Browser is a context-aware AI chat application that brings intelligence to your browsing, file management, and note-taking workflows. Unlike traditional chatbots that operate in isolation, Curios integrates with your current context to provide relevant, actionable assistance.
+
+### Key Capabilities
+
+- **🖥️ Browser Context**: Interact with the current web page - read, summarize, and save content directly from your browser
+- **📁 Files Context**: Access and manage your workspace files with AI assistance
+- **📝 Notes Context**: Build and query your personal knowledge base
+- **🔐 System Management**: Configure AI providers, manage your account, and onboard seamlessly
+
+Whether you're researching a topic, organizing files, or building a knowledge repository, Curios adapts to your current task and provides intelligent support tailored to your needs.
+
+## 🚀 Technical Features
+
+This application is built with modern web technologies to ensure a fast, reliable, and maintainable codebase:
+
+- **TypeScript** - Type-safe React development for robust code
+- **React 19** - Latest React features for optimal performance
+- **Tailwind CSS** - Utility-first CSS framework for rapid, responsive UI development
+- **Storybook** - Component development and documentation environment
+- **Supabase Integration** - Authentication and session management
 - **Yarn** - Fast, reliable package manager
-- **Webpack** - Module bundler (via Create React App)
-- **Testing** - Jest and React Testing Library setup
+- **Webpack** - Optimized module bundler (via Create React App)
+- **Testing Suite** - Jest and React Testing Library for comprehensive testing
 
 ## 📦 Getting Started
 
