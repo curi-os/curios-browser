@@ -2,7 +2,8 @@
 
 **Curios** is an intelligent chat interface designed to help you interact with different contexts in your digital workspace. Think of it as your personal AI assistant that understands not just what you're asking, but where you're asking it from.
 
-![Hello World App](https://github.com/user-attachments/assets/0a9d9147-ea8a-47fb-acb7-241e3055c7fb)
+<img width="2880" height="1386" alt="FireShot Capture 009 - React App -  localhost" src="https://github.com/user-attachments/assets/05f9f9bf-0b63-429d-a329-887443b27e06" />
+
 
 ## 🌟 What is Curios?
 
