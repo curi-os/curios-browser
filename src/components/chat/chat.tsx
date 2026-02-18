@@ -4,7 +4,8 @@ import curiosLogoDarkUrl from "../../images/curios-logo-dark.png";
 import SidebarHeader from "./SidebarHeader";
 import ContextList from "./ContextList";
 import MessageBubble from "./MessageBubble";
-import { uid } from "./utils";
+import CuriosIntroBubble from "./CuriosIntroBubble";
+import { getProviderLabel, getSessionStateLabel, uid } from "./utils";
 import { CONTEXTS } from "./contexts";
 import type { Msg, ChatResponse, ContextId, MessagesResponse, ServerMessage, SessionResponse, Ui } from "./types";
 import { useAuth } from "../../auth/useAuth";
@@ -17,10 +18,16 @@ interface CSSPropertiesWithWebkit extends React.CSSProperties {
 export default function CuriosChat() {
   const API_BASE = (process.env.REACT_APP_API_BASE as string) || "http://localhost:8787";
 
+  const SYSTEM_CONTEXT_HELP =
+    "System context is the default assistant mode for onboarding and account setup.\n\n" +
+    "Use it to sign up/sign in, manage your session, and configure/select an AI provider.\n\n" +
+    "It does not read your current page or workspace files.";
+
   const { loading: authLoading, user, session, supabaseAvailable, signOut } = useAuth();
 
   const [activeContext, setActiveContext] = useState<ContextId>("system");
   const activeContextMeta = CONTEXTS.find((c) => c.id === activeContext)!;
+  const ActiveContextIcon = activeContextMeta.icon;
   const [theme, setTheme] = useState<"dark" | "light">(
     (localStorage.getItem("curios.theme") as "dark" | "light") || "dark"
   );
@@ -36,6 +43,19 @@ export default function CuriosChat() {
   const logoMsgIdRef = useRef<string>(uid());
   // Keep a stable id for the initial assistant greeting message
   const greetingMsgIdRef = useRef<string>(uid());
+
+  function renderHero() {
+    return (
+      <div className="flex flex-col items-center">
+        <div className="h-48 w-48 rounded-xl overflow-hidden">
+          <img src={curiosLogo} className="h-full w-full object-cover" alt="CuriOS" />
+        </div>
+        <div className="text-center text-lg font-semibold -mt-12 px-4">
+          <CuriosIntroBubble isLight={isLight} />
+        </div>
+      </div>
+    );
+  }
 
   function renderGreeting(opts: { loggedIn: boolean; userLabel?: string }) {
     if (opts.loggedIn) {
@@ -57,7 +77,7 @@ export default function CuriosChat() {
     {
       id: logoMsgIdRef.current,
       role: "user",
-      text: <img src={curiosLogo} className="h-52 w-52 center rounded-xl" />,
+      text: renderHero(),
       position: "center"
     },
     {
@@ -687,14 +707,12 @@ export default function CuriosChat() {
 
   // Update the logo message when the theme/logo source changes
   useEffect(() => {
-    setMessages(prev =>
-      prev.map(m =>
-        m.id === logoMsgIdRef.current
-          ? { ...m, text: <img src={curiosLogo} className="h-52 w-52 center rounded-xl" /> }
-          : m
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === logoMsgIdRef.current ? { ...m, text: renderHero() } : m
       )
     );
-  }, [curiosLogo]);
+  }, [curiosLogo, isLight]);
 
   const scrollerRef = useRef<HTMLDivElement | null>(null);
 
@@ -703,7 +721,7 @@ export default function CuriosChat() {
       <div className="flex h-full">
         {/* Sidebar desktop */}
         <aside className={`hidden w-80 flex-col overflow-hidden border-r ${ui.border} ${ui.panel} md:flex`}>
-          <SidebarHeader onReset={resetSession} />
+          <SidebarHeader onReset={resetSession} activeContext={activeContextMeta} isLight={isLight} />
           <div className="flex-1 overflow-y-auto">
             <ContextList
               activeContext={activeContext}
@@ -730,23 +748,38 @@ export default function CuriosChat() {
               </button>
 
               <div className="flex min-w-0 items-center gap-2">
-                <img src="https://avatars.githubusercontent.com/u/234488358?s=200&v=4" className={`h-10 w-10 shrink-0 rounded-xl ${isLight ? "bg-neutral-200" : "bg-neutral-800"}`} />
+                <div
+                  className={[
+                    "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
+                    isLight ? "bg-neutral-200" : "bg-neutral-800",
+                  ].join(" ")}
+                  aria-hidden
+                >
+                  <ActiveContextIcon className={"h-5 w-5"} aria-hidden />
+                </div>
                 <div className="min-w-0 leading-tight">
-                  <div className="truncate text-sm font-semibold">CuriOS</div>
+                  <div className="flex min-w-0 items-center gap-1">
+                    <div className="truncate text-sm font-semibold">{activeContextMeta.label}</div>
+                    {activeContext === "system" && (
+                      <button
+                        type="button"
+                        className={`shrink-0 rounded-full border ${ui.border} px-2 py-0.5 text-[11px] leading-none text-neutral-500 ${ui.hoverPanel}`}
+                        title={SYSTEM_CONTEXT_HELP}
+                        aria-label="What is the System context?"
+                      >
+                        ?
+                      </button>
+                    )}
+                  </div>
                   <div className="truncate text-xs text-neutral-400">
-                    context: {activeContextMeta.label} <br />
-                    state: {serverState}
-                    {selectedProvider ? <><br />provider: {selectedProvider}</> : null}
+                    state: {getSessionStateLabel(serverState)}
+                    {selectedProvider ? <><br />provider: {getProviderLabel(selectedProvider)}</> : null}
                     {!providerConfigured ? <><br />provider configured: no</> : null}
                   </div>
                 </div>
               </div>
 
               <div className="ml-auto flex items-center gap-2">
-                <span className="hidden text-xs text-neutral-500 sm:inline">
-                  {activeContextMeta.description}
-                </span>
-
                 {supabaseAvailable && (
                   <div className="hidden items-center gap-2 sm:flex">
                     <span className="text-xs text-neutral-500">
@@ -941,6 +974,8 @@ export default function CuriosChat() {
             <SidebarHeader
               onReset={resetSession}
               onClose={() => setMobileSidebarOpen(false)}
+              activeContext={activeContextMeta}
+              isLight={isLight}
             />
             <ContextList
               activeContext={activeContext}

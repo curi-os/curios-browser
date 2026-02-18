@@ -1,6 +1,28 @@
 import React, { useMemo } from "react";
 import DOMPurify from "dompurify";
 import type { Ui } from "./types";
+import { getProviderLabel } from "./utils";
+
+function prettifyProviderLine(text: string) {
+  // Replace raw provider identifiers in common settings-style lines.
+  // Examples:
+  // - "Selected Provider: azure_openai" -> "Selected Provider: Azure OpenAI"
+  // - "Selected provider: openai" -> "Selected provider: OpenAI"
+  // - "Provider: mistral" -> "Provider: Mistral"
+  const patterns: RegExp[] = [
+    /^\s*(Selected\s+Provider\s*:\s*)([A-Za-z0-9._-]+)\s*$/gim,
+    /^\s*(Provider\s*:\s*)([A-Za-z0-9._-]+)\s*$/gim,
+  ];
+
+  let next = text;
+  for (const re of patterns) {
+    next = next.replace(re, (_m, prefix: string, providerId: string) => {
+      const friendly = getProviderLabel(providerId);
+      return `${prefix}${friendly || providerId}`;
+    });
+  }
+  return next;
+}
 
 export default function MessageBubble({
   role,
@@ -19,14 +41,20 @@ export default function MessageBubble({
   const isSystem = role === "system";
   const isSecret = messageType === "secret";
 
-  const safeHtml = useMemo(() => {
-    if (isSecret) return null;
-    if (typeof text !== "string") return null;
-    return DOMPurify.sanitize(text, { USE_PROFILES: { html: true } });
+  const normalizedText = useMemo(() => {
+    if (isSecret) return text;
+    if (typeof text !== "string") return text;
+    return prettifyProviderLine(text);
   }, [isSecret, text]);
 
+  const safeHtml = useMemo(() => {
+    if (isSecret) return null;
+    if (typeof normalizedText !== "string") return null;
+    return DOMPurify.sanitize(normalizedText, { USE_PROFILES: { html: true } });
+  }, [isSecret, normalizedText]);
+
   // For secret content, intentionally render a fixed mask (do not leak length).
-  const finalText: React.ReactNode | string = isSecret ? "••••••" : text;
+  const finalText: React.ReactNode | string = isSecret ? "••••••" : normalizedText;
 
   const renderedText: React.ReactNode =
     safeHtml != null ? <div dangerouslySetInnerHTML={{ __html: safeHtml }} /> : <>{finalText}</>;

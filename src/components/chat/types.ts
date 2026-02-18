@@ -1,4 +1,6 @@
-import type { ReactNode } from "react";
+import type { ComponentType, ReactNode } from "react";
+
+export type IconComponent = ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
 
 export type Msg = {
   id: string;
@@ -55,6 +57,7 @@ export type ContextItem = {
   label: string;
   description: string;
   enabled: boolean;
+  icon: IconComponent;
 };
 
 export type Ui = {

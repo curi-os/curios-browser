@@ -31,7 +31,10 @@ export default function ContextList({
               ].join(" ")}
             >
               <div className="flex items-center justify-between">
-                <div className="text-sm font-semibold">{c.label}</div>
+                <div className="flex items-center gap-2">
+                  <c.icon className="h-4 w-4 text-neutral-500" aria-hidden />
+                  <div className="text-sm font-semibold">{c.label}</div>
+                </div>
                 <span className={["rounded-full px-2 py-0.5 text-[10px]", c.enabled ? ui.badgeEnabled : ui.badgeDisabled].join(" ")}>
                   {c.enabled ? (active ? "Active" : "Available") : "Coming soon"}
                 </span>
