@@ -542,7 +542,8 @@ export default function CuriosChat() {
     }
 
     syncServerSession({ reason: "auth-token-changed" });
-  }, [supabaseAvailable, authLoading, session?.access_token, syncServerSession, refreshServerSession]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [supabaseAvailable, authLoading, session?.access_token]);
 
   useEffect(() => {
     const el = bottomRef.current as unknown as { scrollIntoView?: (opts?: any) => void } | null;
@@ -712,7 +713,8 @@ export default function CuriosChat() {
         m.id === logoMsgIdRef.current ? { ...m, text: renderHero() } : m
       )
     );
-  }, [curiosLogo, isLight, renderHero]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [curiosLogo, isLight]);
 
   const scrollerRef = useRef<HTMLDivElement | null>(null);
 
