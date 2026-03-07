@@ -18,6 +18,57 @@ interface CSSPropertiesWithWebkit extends React.CSSProperties {
 export default function CuriosChat() {
   const API_BASE = (process.env.REACT_APP_API_BASE as string) || "http://localhost:8787";
 
+  type HttpError = Error & { status: number; url: string; bodyText?: string };
+
+  function makeHttpError(status: number, url: string, bodyText?: string): HttpError {
+    const err = new Error(`HTTP ${status}`) as HttpError;
+    err.status = status;
+    err.url = url;
+    err.bodyText = bodyText;
+    return err;
+  }
+
+  function isHttpError(e: any): e is HttpError {
+    return Boolean(e) && typeof e === "object" && typeof e.status === "number" && typeof e.url === "string";
+  }
+
+  function formatHttpStatusMessage(e: unknown, opts?: { action?: string; hintBase?: string }) {
+    const action = opts?.action ?? "reach the backend";
+    const hintBase = opts?.hintBase ?? API_BASE;
+
+    if (isHttpError(e)) {
+      const path = (() => {
+        try {
+          return new URL(e.url).pathname;
+        } catch {
+          // If e.url is already a relative path or invalid URL, keep it as-is.
+          return e.url;
+        }
+      })();
+
+      if (e.status === 404) {
+        return (
+          `Status: 404 Not Found.\n\n` +
+          `I couldn't ${action} because the endpoint ${JSON.stringify(path)} was not found on the server.\n\n` +
+          `Check that your backend is running and that REACT_APP_API_BASE points to the correct server (currently: ${hintBase}).`
+        );
+      }
+
+      const body = e.bodyText?.trim();
+      return (
+        `Status: HTTP ${e.status}.\n\n` +
+        `The server responded with an error while trying to ${action} (${path}).` +
+        (body ? `\n\nDetails: ${body}` : "")
+      );
+    }
+
+    const msg = (e as any)?.message;
+    return (
+      `There was an error while trying to ${action}.\n\n` +
+      (typeof msg === "string" && msg.trim() ? `Details: ${msg}` : "")
+    );
+  }
+
   const SYSTEM_CONTEXT_HELP =
     "System context is the default assistant mode for onboarding and account setup.\n\n" +
     "Use it to sign up/sign in, manage your session, and configure/select an AI provider.\n\n" +
@@ -235,7 +286,8 @@ export default function CuriosChat() {
     try {
       const headers: Record<string, string> = buildApiHeaders({ contentType: true });
 
-      const res = await fetch(`${API_BASE}/session`, {
+      const sessionUrl = `${API_BASE}/session`;
+      const res = await fetch(sessionUrl, {
         method: "GET",
         headers,
         credentials: "include",
@@ -243,7 +295,7 @@ export default function CuriosChat() {
 
       if (!res.ok) {
         const errText = await res.text().catch(() => "");
-        throw new Error(`HTTP ${res.status}: ${errText}`);
+        throw makeHttpError(res.status, sessionUrl, errText);
       }
 
       const raw = await res.json();
@@ -268,7 +320,7 @@ export default function CuriosChat() {
       return data;
     } catch (e: any) {
       console.log("Failed to load session:", e, opts?.reason ? { reason: opts.reason } : undefined);
-      setSessionError(e?.message || "Failed to load session");
+      setSessionError(formatHttpStatusMessage(e, { action: "load your session" }));
       setServerState(null);
       setServerUser(null);
       setProviderConfigured(false);
@@ -327,7 +379,8 @@ export default function CuriosChat() {
     if (params.after) url.searchParams.set("after", params.after);
 
     const headers = buildApiHeaders({ contentType: false });
-    const res = await fetch(url.toString(), {
+    const messagesUrl = url.toString();
+    const res = await fetch(messagesUrl, {
       method: "GET",
       headers,
       credentials: "include",
@@ -335,7 +388,7 @@ export default function CuriosChat() {
 
     if (!res.ok) {
       const errText = await res.text().catch(() => "");
-      throw new Error(`HTTP ${res.status}: ${errText}`);
+      throw makeHttpError(res.status, messagesUrl, errText);
     }
 
     const data = (await res.json()) as MessagesResponse;
@@ -375,7 +428,7 @@ export default function CuriosChat() {
       });
     } catch (e: any) {
       console.log("Failed to load message history:", e);
-      setHistoryError(e?.message || "Failed to load message history");
+      setHistoryError(formatHttpStatusMessage(e, { action: "load message history" }));
       // Keep initial greeting/logo on failure.
     } finally {
       setHistoryLoading(false);
@@ -414,6 +467,9 @@ export default function CuriosChat() {
       });
     } catch (e: any) {
       console.log("Failed to load older messages:", e);
+      if (isHttpError(e) && e.status === 404) {
+        setHistoryError(formatHttpStatusMessage(e, { action: "load older messages" }));
+      }
     } finally {
       setLoadingOlder(false);
     }
@@ -451,7 +507,10 @@ export default function CuriosChat() {
         return additions.length ? [...prev, ...additions] : prev;
       });
     } catch (e) {
-      // Best-effort; ignore.
+      // Best-effort. Only surface actionable endpoint errors.
+      if (isHttpError(e) && e.status === 404) {
+        setHistoryError(formatHttpStatusMessage(e, { action: "refresh messages" }));
+      }
     }
   }
 
@@ -612,7 +671,8 @@ export default function CuriosChat() {
         },
       });
 
-      const res = await fetch(`${API_BASE}/chat`, {
+      const chatUrl = `${API_BASE}/chat`;
+      const res = await fetch(chatUrl, {
         method: "POST",
         headers,
         body: JSON.stringify({ message: text }),
@@ -621,7 +681,7 @@ export default function CuriosChat() {
 
       if (!res.ok) {
         const errText = await res.text().catch(() => "");
-        throw new Error(`HTTP ${res.status}: ${errText}`);
+        throw makeHttpError(res.status, chatUrl, errText);
       }
 
       const data = (await res.json()) as ChatResponse;
@@ -652,9 +712,7 @@ export default function CuriosChat() {
       const botMsg: Msg = {
         id: uid(),
         role: "assistant",
-        text:
-          "There was an error communicating with the backend. Make sure it is running and the address is correct.\n\n" +
-          (e?.message ? `Details: ${e.message}` : ""),
+        text: formatHttpStatusMessage(e, { action: "send your message" }),
       };
       setMessages((prev) => [...prev, botMsg]);
     } finally {
