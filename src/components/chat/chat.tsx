@@ -9,6 +9,7 @@ import { getProviderLabel, getSessionStateLabel, uid } from "./utils";
 import { CONTEXTS } from "./contexts";
 import type { Msg, ChatResponse, ContextId, MessagesResponse, ServerMessage, SessionResponse, Ui } from "./types";
 import { useAuth } from "../../auth/useAuth";
+import { APP_NAME } from "../../branding";
 
 // Allow vendor-specific WebKit property in inline styles
 interface CSSPropertiesWithWebkit extends React.CSSProperties {
@@ -101,7 +102,7 @@ export default function CuriosChat() {
     return (
       <div className="flex flex-col items-center">
         <div className="h-48 w-48 rounded-xl overflow-hidden">
-          <img src={curiosLogo} className="h-full w-full object-cover" alt="CuriOS" />
+          <img src={curiosLogo} className="h-full w-full object-cover" alt={APP_NAME} />
         </div>
         <div className="text-center text-lg font-semibold -mt-12 px-4">
           <CuriosIntroBubble isLight={isLight} />
@@ -121,7 +122,7 @@ export default function CuriosChat() {
 
     return (
       <>
-        Welcome to CuriOS. Do you want to <strong>Signup, Signin in or continue as a guest?</strong>
+        Welcome to {APP_NAME}. Do you want to <strong>Signup, Signin in or continue as a guest?</strong>
       </>
     );
   }

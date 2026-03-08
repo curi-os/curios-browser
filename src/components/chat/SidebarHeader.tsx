@@ -2,6 +2,7 @@ import React from "react";
 import curiosLogoWhiteUrl from "../../images/curios-logo-white.png";
 import type { ContextItem } from "./types";
 import { BookOpen } from "lucide-react";
+import { APP_NAME, APP_TAGLINE } from "../../branding";
 
 export default function SidebarHeader({
   onReset,
@@ -31,13 +32,12 @@ export default function SidebarHeader({
             <img
               className={`h-10 w-10 rounded-2xl ${logoBgClass}`}
               src={curiosLogoWhiteUrl}
-              alt="CuriOS logo"
+              alt={`${APP_NAME} logo`}
             />
           </div>
           <div className="leading-tight">
-            <div className="text-sm font-semibold">CuriOS</div>
-            <div className="text-xs text-neutral-400"></div>
-          <div className="text-xs text-neutral-500">Conversational OS</div>
+            <div className="text-sm font-semibold">{APP_NAME}</div>
+            <div className="text-xs text-neutral-500">{APP_TAGLINE}</div>
           </div>
         </div>
         <div className="flex items-center gap-2">
