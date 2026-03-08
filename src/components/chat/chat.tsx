@@ -74,7 +74,9 @@ export default function CuriosChat() {
     "Use it to sign up/sign in, manage your session, and configure/select an AI provider.\n\n" +
     "It does not read your current page or workspace files.";
 
-  const { loading: authLoading, user, session, supabaseAvailable, signOut } = useAuth();
+  const { loading: authLoading, user, session, supabaseAvailable, authRedirectError, signOut } = useAuth();
+
+  const lastShownAuthRedirectErrorRef = useRef<string | null>(null);
 
   const [activeContext, setActiveContext] = useState<ContextId>("system");
   const activeContextMeta = CONTEXTS.find((c) => c.id === activeContext)!;
@@ -141,6 +143,29 @@ export default function CuriosChat() {
   ]);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
+
+  // If Supabase redirects back with an error (e.g. expired confirmation link),
+  // show it to the user as an assistant message bubble.
+  useEffect(() => {
+    if (!authRedirectError) return;
+
+    const fingerprint = `${authRedirectError.error}:${authRedirectError.errorCode ?? ""}:${authRedirectError.errorDescription ?? ""}`;
+    if (lastShownAuthRedirectErrorRef.current === fingerprint) return;
+    lastShownAuthRedirectErrorRef.current = fingerprint;
+
+    const description = (authRedirectError.errorDescription || "").trim() || "Email link is invalid or has expired.";
+    const code = (authRedirectError.errorCode || "").trim();
+    const detailsLine = code ? `\n\nCode: ${code}` : "";
+
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: uid(),
+        role: "assistant",
+        text: `Account confirmation failed.\n\n${description}${detailsLine}`,
+      },
+    ]);
+  }, [authRedirectError]);
 
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
@@ -419,12 +444,32 @@ export default function CuriosChat() {
 
       setMessages((prev) => {
         // Keep logo at the top; keep greeting only when there is no history.
+        // Preserve any already-rendered local UI messages (e.g. auth redirect errors)
+        // so they don't disappear when history loads.
         const logo = prev.find((m) => m.id === logoMsgIdRef.current);
         const greeting = prev.find((m) => m.id === greetingMsgIdRef.current);
-        const next: Msg[] = [];
-        if (logo) next.push(logo);
-        if (mapped.length === 0 && greeting) next.push(greeting);
-        return [...next, ...mapped];
+
+        const top: Msg[] = [];
+        if (logo) top.push(logo);
+        if (mapped.length === 0 && greeting) top.push(greeting);
+
+        const mappedFingerprints = new Set<string>();
+        for (const m of mapped) {
+          const fp = messageFingerprint(m);
+          if (fp) mappedFingerprints.add(fp);
+        }
+
+        const preserved: Msg[] = [];
+        for (const m of prev) {
+          if (m.id === logoMsgIdRef.current) continue;
+          if (m.id === greetingMsgIdRef.current) continue;
+
+          const fp = messageFingerprint(m);
+          if (fp && mappedFingerprints.has(fp)) continue;
+          preserved.push(m);
+        }
+
+        return [...top, ...mapped, ...preserved];
       });
     } catch (e: any) {
       console.log("Failed to load message history:", e);

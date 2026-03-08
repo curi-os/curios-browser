@@ -4,11 +4,18 @@ import { getSupabaseClient } from "../lib/supabaseClient";
 
 let didAttemptHandleRedirect = false;
 
+type AuthRedirectError = {
+  error: string;
+  errorCode?: string;
+  errorDescription?: string;
+};
+
 type AuthContextValue = {
   loading: boolean;
   user: User | null;
   session: Session | null;
   supabaseAvailable: boolean;
+  authRedirectError: AuthRedirectError | null;
   signOut: () => Promise<void>;
 };
 
@@ -32,6 +39,29 @@ function clearAuthParamsFromUrl(opts: { clearHash: boolean; removeSearchKeys: st
 
   const newUrl = `${url.pathname}${url.search}${url.hash}`;
   window.history.replaceState(null, document.title, newUrl);
+}
+
+function readAuthRedirectErrorFromUrl(): AuthRedirectError | null {
+  const hashParams = readHashParams(window.location.hash);
+  const searchParams = new URLSearchParams(window.location.search);
+
+  // Supabase can return these in the hash (legacy implicit/magic links) or
+  // in the query string (PKCE flows).
+  const error = hashParams.get("error") || searchParams.get("error");
+  const errorCode = hashParams.get("error_code") || searchParams.get("error_code") || undefined;
+  const errorDescription =
+    hashParams.get("error_description") ||
+    searchParams.get("error_description") ||
+    undefined;
+
+  // Some redirects may only include a description without the "error" key.
+  if (!error && !errorDescription) return null;
+
+  return {
+    error: error || "auth_error",
+    errorCode,
+    errorDescription,
+  };
 }
 
 async function tryHandleAuthRedirect(supabase: ReturnType<typeof getSupabaseClient>): Promise<boolean> {
@@ -94,6 +124,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
+  const [authRedirectError, setAuthRedirectError] = useState<AuthRedirectError | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -109,6 +140,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // React.StrictMode runs effects twice in dev; this guard keeps the exchange idempotent.
         if (!didAttemptHandleRedirect) {
           didAttemptHandleRedirect = true;
+
+          // If the callback URL contains an error (e.g. expired email link),
+          // surface it to the UI and clear it from the address bar.
+          const redirectError = readAuthRedirectErrorFromUrl();
+          if (redirectError) {
+            const hashParams = readHashParams(window.location.hash);
+            const searchParams = new URLSearchParams(window.location.search);
+            const hasLegacyTokens = Boolean(hashParams.get("access_token") && hashParams.get("refresh_token"));
+            const hasPkceCode = Boolean(searchParams.get("code"));
+
+            // If we have a valid payload to exchange, let the normal handler deal with it.
+            // Otherwise, record the error and remove it from the address bar.
+            if (!hasLegacyTokens && !hasPkceCode) {
+              setAuthRedirectError(redirectError);
+              clearAuthParamsFromUrl({
+                clearHash: true,
+                removeSearchKeys: [
+                  "code",
+                  "type",
+                  "provider",
+                  "error",
+                  "error_code",
+                  "error_description",
+                  "sb",
+                ],
+              });
+            }
+          }
+
           await tryHandleAuthRedirect(supabase);
         }
 
@@ -151,6 +211,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     user,
     session,
     supabaseAvailable: Boolean(supabase),
+    authRedirectError,
     signOut: async () => {
       if (!supabase) return;
       await supabase.auth.signOut();
