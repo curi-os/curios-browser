@@ -1,8 +1,8 @@
 import React from "react";
-import curiosLogoWhiteUrl from "../../images/curios-logo-white.png";
-import type { ContextItem } from "./types";
+import curiosLogoWhiteUrl from "../../../images/curios-logo-white.png";
+import type { ContextItem } from "../shared/types";
 import { BookOpen } from "lucide-react";
-import { APP_NAME, APP_TAGLINE } from "../../branding";
+import { APP_NAME, APP_TAGLINE } from "../../../branding";
 
 export default function SidebarHeader({
   onReset,
@@ -42,10 +42,7 @@ export default function SidebarHeader({
         </div>
         <div className="flex items-center gap-2">
           {onClose && (
-            <button
-              onClick={onClose}
-              className={buttonClass}
-            >
+            <button onClick={onClose} className={buttonClass}>
               Close
             </button>
           )}
@@ -65,14 +62,9 @@ export default function SidebarHeader({
 
       <div className="mt-3 text-xs text-neutral-300">
         Context: You are now on{" "}
-        <span className="inline-flex items-center gap-1.5 text-neutral-500 dark:text-neutral-300">
-          {activeContext.label}
-        </span>
-        .
+        <span className="inline-flex items-center gap-1.5 text-neutral-500 dark:text-neutral-300">{activeContext.label}</span>.
 
-        <div className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
-          {activeContext.description}
-        </div>
+        <div className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">{activeContext.description}</div>
       </div>
     </div>
   );

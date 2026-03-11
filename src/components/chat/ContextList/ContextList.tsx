@@ -1,6 +1,6 @@
 import React from "react";
-import type { ContextId, Ui } from "./types";
-import { CONTEXTS } from "./contexts";
+import type { ContextId, Ui } from "../shared/types";
+import { CONTEXTS } from "../shared/contexts";
 
 export default function ContextList({
   activeContext,
@@ -35,7 +35,12 @@ export default function ContextList({
                   <c.icon className="h-4 w-4 text-neutral-500" aria-hidden />
                   <div className="text-sm font-semibold">{c.label}</div>
                 </div>
-                <span className={["rounded-full px-2 py-0.5 text-[10px]", c.enabled ? ui.badgeEnabled : ui.badgeDisabled].join(" ")}>
+                <span
+                  className={[
+                    "rounded-full px-2 py-0.5 text-[10px]",
+                    c.enabled ? ui.badgeEnabled : ui.badgeDisabled,
+                  ].join(" ")}
+                >
                   {c.enabled ? (active ? "Active" : "Available") : "Coming soon"}
                 </span>
               </div>

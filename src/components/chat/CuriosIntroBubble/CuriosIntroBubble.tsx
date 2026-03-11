@@ -1,5 +1,5 @@
 import React from "react";
-import { APP_TAGLINE } from "../../branding";
+import { APP_TAGLINE } from "../../../branding";
 
 export default function CuriosIntroBubble({ isLight }: { isLight: boolean }) {
   const bubbleClass = isLight
@@ -9,9 +9,7 @@ export default function CuriosIntroBubble({ isLight }: { isLight: boolean }) {
   return (
     <div className="mx-auto w-full max-w-xl mb-12">
       <div className={["rounded-2xl px-5 py-4 text-sm leading-relaxed text-center", bubbleClass].join(" ")}>
-        <div className={isLight ? "text-neutral-700" : "text-neutral-500"}>
-          {APP_TAGLINE}
-        </div>
+        <div className={isLight ? "text-neutral-700" : "text-neutral-500"}>{APP_TAGLINE}</div>
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import CuriosChat from './components/chat/chat';
+import CuriosChat from './components/chat/CuriosChat';
 import { APP_NAME, APP_TAGLINE } from './branding';
 
 function App() {

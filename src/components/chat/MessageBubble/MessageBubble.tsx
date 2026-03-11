@@ -1,7 +1,7 @@
 import React, { useMemo } from "react";
 import DOMPurify from "dompurify";
-import type { Ui } from "./types";
-import { getProviderLabel } from "./utils";
+import type { Ui } from "../shared/types";
+import { getProviderLabel } from "../../../utils/getProviderLabel";
 
 function prettifyProviderLine(text: string) {
   // Replace raw provider identifiers in common settings-style lines.
