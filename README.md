@@ -17,7 +17,7 @@ As the front-end of CuriOS, this browser provides context-aware conversational i
 
 - **🖥️ Browser Context**: Interact with web pages through chat - read, summarize, and save content conversationally
 - **📁 Files Context**: Access and manage your workspace files through natural language
-- **📝 Notes Context**: Build and query your personal knowledge base via conversation
+- **📝 Notes Context**: Build and query your personal notes base via conversation
 - **🔐 System Management**: Configure AI providers, manage your account, and complete onboarding through guided chat
 
 Whether you're researching a topic, organizing files, or building a knowledge repository, the Curios Browser adapts to your current task and provides intelligent support tailored to your needs - all through conversational interactions with CuriOS.
