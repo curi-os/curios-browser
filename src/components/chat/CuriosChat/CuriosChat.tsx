@@ -103,6 +103,7 @@ export default function CuriosChat() {
   } = useCuriosChatController({
     apiBase: API_BASE,
     activeContext,
+    setActiveContext,
     supabaseAvailable,
     authLoading,
     user: user ? { id: user.id, email: user.email } : null,

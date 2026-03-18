@@ -95,6 +95,7 @@ function normalizeSessionResponse(raw: any): SessionResponse {
     user: user && typeof user === "object" ? user : null,
     providerConfigured: providerConfiguredNormalized,
     selectedProvider: selectedProviderNormalized,
+    ctxName: typeof raw?.ctxName === "string" ? raw.ctxName : typeof raw?.ctx_name === "string" ? raw.ctx_name : "system",
   };
 }
 
@@ -135,6 +136,7 @@ function messageFingerprint(m: Msg, staticIds: { logo: string; greeting: string 
 export function useCuriosChatController(args: {
   apiBase: string;
   activeContext: ContextId;
+  setActiveContext: (id: ContextId) => void;
   supabaseAvailable: boolean;
   authLoading: boolean;
   user: { id: string; email?: string | null } | null;
@@ -143,7 +145,7 @@ export function useCuriosChatController(args: {
   staticIds: { logo: string; greeting: string };
   scrollerRef: RefObject<HTMLDivElement | null>;
 }) {
-  const { apiBase, activeContext, supabaseAvailable, authLoading, user, session, setMessages, staticIds, scrollerRef } = args;
+  const { apiBase, activeContext, supabaseAvailable, authLoading, user, session, setMessages, staticIds, scrollerRef, setActiveContext } = args;
 
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -278,6 +280,7 @@ export function useCuriosChatController(args: {
       setProviderConfigured(Boolean(data.providerConfigured));
       setSelectedProvider(data.selectedProvider ?? null);
       setMaskInput(data.chatType === "secret");
+      setActiveContext(data.ctxName ?? "system");
 
       if (data.sessionId !== sessionIdRef.current) {
         sessionIdRef.current = data.sessionId;

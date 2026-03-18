@@ -42,6 +42,7 @@ export type SessionResponse = {
   sessionId: string;
   state: string;
   chatType: "text" | "secret";
+  ctxName: ContextId;
   user: null | {
     userId: string;
     email?: string;

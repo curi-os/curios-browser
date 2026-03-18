@@ -13,8 +13,8 @@ export const CONTEXTS: ContextItem[] = [
   {
     id: "browser",
     label: "Browser",
-    description: "Current page: read, summarize, save",
-    enabled: false,
+    description: "Access web content in real-time",
+    enabled: true,
     icon: Globe,
   },
   {
@@ -27,7 +27,7 @@ export const CONTEXTS: ContextItem[] = [
   {
     id: "notes",
     label: "Notes",
-    description: "Knowledge base",
+    description: "Manage your notes",
     enabled: false,
     icon: StickyNote,
   },
