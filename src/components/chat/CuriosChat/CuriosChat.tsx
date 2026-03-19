@@ -20,7 +20,12 @@ export default function CuriosChat() {
 
   const lastShownAuthRedirectErrorRef = useRef<string | null>(null);
 
-  const [activeContext, setActiveContext] = useState<ContextId>("system");
+  const [activeContext, setActiveContext] = useState<ContextId>(() => {
+    const stored = localStorage.getItem("curios.activeContext");
+    return stored === "browser" || stored === "files" || stored === "notes" || stored === "system"
+      ? (stored as ContextId)
+      : "system";
+  });
   const activeContextMeta = CONTEXTS.find((c) => c.id === activeContext)!;
   const [theme, setTheme] = useState<"dark" | "light">((localStorage.getItem("curios.theme") as "dark" | "light") || "dark");
   const isLight = theme === "light";
@@ -61,6 +66,17 @@ export default function CuriosChat() {
     );
   }
 
+  function appendAssistantMessage(text: string) {
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: uid(),
+        role: "assistant",
+        text,
+      },
+    ]);
+  }
+
   const [messages, setMessages] = useState<Msg[]>([
     {
       id: logoMsgIdRef.current,
@@ -83,6 +99,8 @@ export default function CuriosChat() {
   const {
     input,
     setInput,
+    applyLocalContext,
+    persistContextSelection,
     isSending,
     send,
     maskInput,
@@ -181,6 +199,10 @@ export default function CuriosChat() {
   }, [theme]);
 
   useEffect(() => {
+    localStorage.setItem("curios.activeContext", activeContext);
+  }, [activeContext]);
+
+  useEffect(() => {
     if (supabaseAvailable && authLoading) return;
     const loggedIn = Boolean(effectiveUser);
     const userLabel = effectiveUserLabel;
@@ -200,6 +222,40 @@ export default function CuriosChat() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [curiosLogo, isLight]);
 
+  function handleSelectContext(nextContext: ContextId) {
+    if (nextContext !== "browser") {
+      persistContextSelection(nextContext);
+      return;
+    }
+
+    const isGuest = effectiveUser?.id === "guest-user";
+    const isSignedIn = Boolean(effectiveUser && !isGuest);
+
+    if (!isSignedIn) {
+      applyLocalContext("system");
+      appendAssistantMessage("Please sign in first before using the Browser app.");
+      return;
+    }
+
+    if (!providerConfigured || serverState === "NO_PROVIDER" || serverState === "PROVIDER_SETUP") {
+      applyLocalContext("system");
+      appendAssistantMessage(
+        "Before using the Browser app, please configure a provider. Type <strong>Change provider</strong> and set your own <strong>OpenAI API key</strong> or a <strong>Custom endpoint</strong>."
+      );
+      return;
+    }
+
+    if (selectedProvider === "ollama") {
+      applyLocalContext("system");
+      appendAssistantMessage(
+        "The Browser app can’t run with <strong>Local Ollama</strong>.<br />To use Browser, type <strong>Change provider</strong> and switch to your own <strong>OpenAI API key</strong> or a <strong>Custom endpoint</strong>."
+      );
+      return;
+    }
+
+    persistContextSelection("browser");
+  }
+
   return (
     <div className={`h-screen overflow-hidden ${ui.app}`}>
       <div className="flex h-full">
@@ -207,7 +263,7 @@ export default function CuriosChat() {
           ui={ui}
           activeContextMeta={activeContextMeta}
           activeContext={activeContext}
-          onSelectContext={setActiveContext}
+          onSelectContext={handleSelectContext}
           onReset={resetSession}
           sessionId={sessionId}
           isLight={isLight}
@@ -276,7 +332,7 @@ export default function CuriosChat() {
         ui={ui}
         activeContextMeta={activeContextMeta}
         activeContext={activeContext}
-        onSelectContext={setActiveContext}
+        onSelectContext={handleSelectContext}
         onReset={resetSession}
         sessionId={sessionId}
         isLight={isLight}

@@ -168,6 +168,11 @@ export function useCuriosChatController(args: {
     sessionIdRef.current = sessionId;
   }, [sessionId]);
 
+  const activeContextRef = useRef<ContextId>(activeContext);
+  useEffect(() => {
+    activeContextRef.current = activeContext;
+  }, [activeContext]);
+
   const [serverState, setServerState] = useState<string | null>(null);
   const serverStateRef = useRef<string | null>(serverState);
   useEffect(() => {
@@ -236,10 +241,15 @@ export function useCuriosChatController(args: {
 
   const effectiveUserLabel = effectiveUser?.email ?? effectiveUser?.id;
 
-  function buildApiHeaders(opts?: { contentType?: boolean; extra?: Record<string, string> }) {
+  function buildApiHeaders(opts?: {
+    contentType?: boolean;
+    extra?: Record<string, string>;
+    contextOverride?: ContextId;
+  }) {
     const headers: Record<string, string> = {};
     if (opts?.contentType) headers["content-type"] = "application/json";
     headers["X-Session-Id"] = sessionIdRef.current;
+    headers["x-curios-context"] = opts?.contextOverride ?? activeContextRef.current;
 
     if (effectiveUserLabel) headers["x-curios-user"] = effectiveUserLabel;
     if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
@@ -251,7 +261,11 @@ export function useCuriosChatController(args: {
     return headers;
   }
 
-  async function refreshServerSession(opts?: { reason?: string; setBusy?: boolean }): Promise<SessionResponse | null> {
+  async function refreshServerSession(opts?: {
+    reason?: string;
+    setBusy?: boolean;
+    contextOverride?: ContextId;
+  }): Promise<SessionResponse | null> {
     const setBusy = opts?.setBusy !== false;
     if (setBusy) setSessionLoading(true);
     if (setBusy) setSessionError(null);
@@ -259,7 +273,10 @@ export function useCuriosChatController(args: {
     latestSessionRequestIdRef.current = requestId;
 
     try {
-      const headers: Record<string, string> = buildApiHeaders({ contentType: true });
+      const headers: Record<string, string> = buildApiHeaders({
+        contentType: true,
+        contextOverride: opts?.contextOverride,
+      });
 
       const sessionUrl = `${apiBase}/session`;
       const res = await fetch(sessionUrl, {
@@ -485,6 +502,16 @@ export function useCuriosChatController(args: {
     }
   }
 
+  function applyLocalContext(nextContext: ContextId) {
+    clearSessionSyncTimeout();
+    latestSessionRequestIdRef.current += 1;
+    setActiveContext(nextContext);
+  }
+
+  function persistContextSelection(nextContext: ContextId) {
+    applyLocalContext(nextContext);
+  }
+
   useEffect(() => {
     return () => {
       clearSessionSyncTimeout();
@@ -544,9 +571,6 @@ export function useCuriosChatController(args: {
     try {
       const headers: Record<string, string> = buildApiHeaders({
         contentType: true,
-        extra: {
-          "x-curios-context": activeContext,
-        },
       });
 
       const chatUrl = `${apiBase}/chat`;
@@ -563,6 +587,10 @@ export function useCuriosChatController(args: {
       }
 
       const data = (await res.json()) as ChatResponse;
+      // Invalidate any in-flight /session response so an older refresh cannot
+      // overwrite a newer /chat context switch (for example system -> browser).
+      clearSessionSyncTimeout();
+      latestSessionRequestIdRef.current += 1;
       setMaskInput(data.chatType === "secret");
       setActiveContext(data.ctxName ?? "system");
 
@@ -575,7 +603,8 @@ export function useCuriosChatController(args: {
       const prevState = serverStateRef.current;
       if (data.state) setServerState(data.state);
 
-      if (data.state && data.state !== prevState) {
+      const switchedIntoBrowser = data.ctxName === "browser" || data.state === "BROWSING";
+      if (data.state && data.state !== prevState && !switchedIntoBrowser) {
         syncServerSession({ reason: `post-chat-state-change:${data.state}` });
       }
 
@@ -634,6 +663,8 @@ export function useCuriosChatController(args: {
   return {
     input,
     setInput,
+    applyLocalContext,
+    persistContextSelection,
     isSending,
     send,
     maskInput,
