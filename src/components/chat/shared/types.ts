@@ -35,6 +35,7 @@ export type ChatResponse = {
   state: string;
   chatType: "text" | "secret";
   reply: string;
+  ctxName?: ContextId;
 };
 
 export type SessionResponse = {

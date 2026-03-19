@@ -203,6 +203,7 @@ export function useCuriosChatController(args: {
 
   const sessionSyncTimeoutRef = useRef<number | null>(null);
   const lastSeenAccessTokenRef = useRef<string | null>(null);
+  const didRunInitialLoadRef = useRef<boolean>(false);
 
   function clearSessionSyncTimeout() {
     if (sessionSyncTimeoutRef.current !== null) {
@@ -481,12 +482,16 @@ export function useCuriosChatController(args: {
   }, []);
 
   useEffect(() => {
+    if (didRunInitialLoadRef.current) return;
+    if (supabaseAvailable && authLoading) return;
+
+    didRunInitialLoadRef.current = true;
     (async () => {
       await refreshServerSession({ reason: "mount", setBusy: true });
       await loadInitialHistory();
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiBase]);
+  }, [apiBase, supabaseAvailable, authLoading]);
 
   useEffect(() => {
     if (!supabaseAvailable) return;
@@ -548,6 +553,7 @@ export function useCuriosChatController(args: {
 
       const data = (await res.json()) as ChatResponse;
       setMaskInput(data.chatType === "secret");
+      setActiveContext(data.ctxName ?? "system");
 
       if (data.sessionId && data.sessionId !== sessionId) {
         sessionIdRef.current = data.sessionId;
