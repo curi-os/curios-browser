@@ -204,6 +204,7 @@ export function useCuriosChatController(args: {
   const sessionSyncTimeoutRef = useRef<number | null>(null);
   const lastSeenAccessTokenRef = useRef<string | null>(null);
   const didRunInitialLoadRef = useRef<boolean>(false);
+  const latestSessionRequestIdRef = useRef<number>(0);
 
   function clearSessionSyncTimeout() {
     if (sessionSyncTimeoutRef.current !== null) {
@@ -254,6 +255,8 @@ export function useCuriosChatController(args: {
     const setBusy = opts?.setBusy !== false;
     if (setBusy) setSessionLoading(true);
     if (setBusy) setSessionError(null);
+    const requestId = latestSessionRequestIdRef.current + 1;
+    latestSessionRequestIdRef.current = requestId;
 
     try {
       const headers: Record<string, string> = buildApiHeaders({ contentType: true });
@@ -276,6 +279,10 @@ export function useCuriosChatController(args: {
         throw new Error("Invalid /session response");
       }
 
+      if (requestId !== latestSessionRequestIdRef.current) {
+        return data;
+      }
+
       setServerState(data.state);
       setServerUser(data.user);
       setProviderConfigured(Boolean(data.providerConfigured));
@@ -291,6 +298,10 @@ export function useCuriosChatController(args: {
 
       return data;
     } catch (e: any) {
+      if (requestId !== latestSessionRequestIdRef.current) {
+        return null;
+      }
+
       console.log("Failed to load session:", e, opts?.reason ? { reason: opts.reason } : undefined);
       setSessionError(formatHttpStatusMessage(apiBase, e, { action: "load your session" }));
       setServerState(null);
