@@ -47,7 +47,7 @@ export default function SidebarHeader({
             </button>
           )}
           <a
-            href="https://github.com/curi-os/docs"
+            href="https://curi-os.github.io/docs/"
             target="_blank"
             rel="noreferrer"
             className={`inline-flex items-center gap-1.5 ${buttonClass}`}
