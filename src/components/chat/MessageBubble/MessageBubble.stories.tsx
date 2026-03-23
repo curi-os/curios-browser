@@ -62,3 +62,17 @@ export const Secret: Story = {
     messageType: 'secret',
   },
 };
+
+export const AssistantHtml: Story = {
+  args: {
+    role: 'assistant',
+    text: 'Try <strong>Change provider</strong><br />Then open <code>Use Browser app</code>.',
+  },
+};
+
+export const UserHtmlLiteral: Story = {
+  args: {
+    role: 'user',
+    text: '<div class=\"example\">literal html should stay visible</div>',
+  },
+};
