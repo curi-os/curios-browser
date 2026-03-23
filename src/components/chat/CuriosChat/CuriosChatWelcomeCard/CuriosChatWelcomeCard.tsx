@@ -16,8 +16,9 @@ function TypeInstruction(props: {
   delayMs?: number;
   tooltip?: React.ReactNode;
   tooltipAriaLabel?: string;
+  animate?: boolean;
 }) {
-  const { text, isLight, delayMs = 0, tooltip, tooltipAriaLabel } = props;
+  const { text, isLight, delayMs = 0, tooltip, tooltipAriaLabel, animate = true } = props;
   const [visibleText, setVisibleText] = useState("");
   const [tooltipOpen, setTooltipOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -25,7 +26,7 @@ function TypeInstruction(props: {
   useEffect(() => {
     if (!tooltipOpen) return;
 
-    function onPointerDown(e: PointerEvent) {
+    function onDocumentClick(e: MouseEvent) {
       const root = rootRef.current;
       if (!root) return;
       if (root.contains(e.target as Node)) return;
@@ -36,15 +37,20 @@ function TypeInstruction(props: {
       if (e.key === "Escape") setTooltipOpen(false);
     }
 
-    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("click", onDocumentClick);
     document.addEventListener("keydown", onKeyDown);
     return () => {
-      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("click", onDocumentClick);
       document.removeEventListener("keydown", onKeyDown);
     };
   }, [tooltipOpen]);
 
   useEffect(() => {
+    if (!animate) {
+      setVisibleText(text);
+      return;
+    }
+
     const prefersReduced =
       typeof window !== "undefined" &&
       typeof window.matchMedia === "function" &&
@@ -77,7 +83,7 @@ function TypeInstruction(props: {
         window.clearInterval(intervalId);
       }
     };
-  }, [text, delayMs]);
+  }, [animate, text, delayMs]);
 
   const complete = visibleText.length >= text.length;
   const showHelp = Boolean(tooltip) && complete;
@@ -134,12 +140,18 @@ function TypeInstruction(props: {
 function RotatingPromptExamples(props: {
   examples: readonly string[];
   isLight: boolean;
+  animate?: boolean;
 }) {
-  const { examples, isLight } = props;
+  const { examples, isLight, animate = true } = props;
   const [activeIndex, setActiveIndex] = useState(0);
   const [visibleText, setVisibleText] = useState("");
 
   useEffect(() => {
+    if (!animate) {
+      setVisibleText(examples[activeIndex] ?? examples[0] ?? "");
+      return;
+    }
+
     const prefersReduced =
       typeof window !== "undefined" &&
       typeof window.matchMedia === "function" &&
@@ -195,7 +207,7 @@ function RotatingPromptExamples(props: {
         window.clearTimeout(timeoutId);
       }
     };
-  }, [examples]);
+  }, [activeIndex, animate, examples]);
 
   return (
     <div className={["mt-2 rounded-2xl border px-3 py-2.5", isLight ? "border-neutral-300 bg-neutral-50/80" : "border-neutral-700 bg-neutral-900/70"].join(" ")}>
@@ -206,7 +218,7 @@ function RotatingPromptExamples(props: {
         <span className="text-curios-accent">&gt;</span>
         <span className="min-w-0 flex-1 break-words">
           {visibleText || examples[activeIndex] || "\u00A0"}
-          <span aria-hidden="true" className="ml-0.5 inline-block animate-pulse opacity-70">|</span>
+          <span aria-hidden="true" className={animate ? "ml-0.5 inline-block animate-pulse opacity-70" : "ml-0.5 inline-block opacity-40"}>|</span>
         </span>
       </div>
     </div>
@@ -246,8 +258,9 @@ function WelcomeStepCard(props: {
   delayMs: number;
   isLight: boolean;
   footer?: React.ReactNode;
+  animate?: boolean;
 }) {
-  const { step, title, description, typeText, typeTooltip, delayMs, isLight, footer } = props;
+  const { step, title, description, typeText, typeTooltip, delayMs, isLight, footer, animate = true } = props;
 
   return (
     <div className={["h-full rounded-2xl border px-3 py-2.5", isLight ? "border-neutral-200 bg-white/70" : "border-neutral-800 bg-neutral-900/40"].join(" ")}>
@@ -256,8 +269,8 @@ function WelcomeStepCard(props: {
           {step}
         </div>
         <div>
-          <div className="text-sm font-semibold">{title}</div>
-          <div className={["mt-1 text-[13px] leading-5", isLight ? "text-neutral-700" : "text-neutral-300"].join(" ")}>
+          <div className="select-text text-sm font-semibold">{title}</div>
+          <div className={["mt-1 select-text text-[13px] leading-5", isLight ? "text-neutral-700" : "text-neutral-300"].join(" ")}>
             {description}
           </div>
           {typeText && (
@@ -267,6 +280,7 @@ function WelcomeStepCard(props: {
               delayMs={delayMs}
               tooltip={typeTooltip}
               tooltipAriaLabel={typeTooltip ? "Supported providers" : undefined}
+              animate={animate}
             />
           )}
           {footer}
@@ -284,10 +298,38 @@ export default function CuriosChatWelcomeCard(props: {
   supportedProviders: readonly string[];
 }) {
   const { appName, isLight, loggedIn, userLabel, supportedProviders } = props;
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const [selectionActive, setSelectionActive] = useState(false);
+
+  useEffect(() => {
+    function updateSelectionState() {
+      const root = rootRef.current;
+      const selection = typeof window !== "undefined" && typeof window.getSelection === "function" ? window.getSelection() : null;
+      if (!root || !selection || selection.isCollapsed) {
+        setSelectionActive(false);
+        return;
+      }
+
+      const anchorNode = selection.anchorNode;
+      const focusNode = selection.focusNode;
+      const isInsideSelection =
+        Boolean(anchorNode && root.contains(anchorNode)) || Boolean(focusNode && root.contains(focusNode));
+
+      setSelectionActive(isInsideSelection);
+    }
+
+    document.addEventListener("selectionchange", updateSelectionState);
+    document.addEventListener("pointerup", updateSelectionState);
+
+    return () => {
+      document.removeEventListener("selectionchange", updateSelectionState);
+      document.removeEventListener("pointerup", updateSelectionState);
+    };
+  }, []);
 
   if (loggedIn) {
     return (
-      <div className="space-y-2.5">
+      <div ref={rootRef} className="space-y-2.5 select-text">
         <div>
           You are signed in
           {userLabel ? (
@@ -322,6 +364,7 @@ export default function CuriosChatWelcomeCard(props: {
               }
               delayMs={180}
               isLight={isLight}
+              animate={!selectionActive}
             />
 
             <WelcomeStepCard
@@ -331,6 +374,7 @@ export default function CuriosChatWelcomeCard(props: {
               typeText="Use browser"
               delayMs={320}
               isLight={isLight}
+              animate={!selectionActive}
             />
 
             <div className="lg:col-span-2">
@@ -340,7 +384,8 @@ export default function CuriosChatWelcomeCard(props: {
                 description="Talk with your browser. You can ask Curios to compare websites, inspect pages, and analyze content in real time, a smart browser for you."
                 delayMs={460}
                 isLight={isLight}
-                footer={<RotatingPromptExamples examples={EXAMPLE_PROMPTS} isLight={isLight} />}
+                animate={!selectionActive}
+                footer={<RotatingPromptExamples examples={EXAMPLE_PROMPTS} isLight={isLight} animate={!selectionActive} />}
               />
             </div>
           </div>
@@ -352,7 +397,7 @@ export default function CuriosChatWelcomeCard(props: {
   }
 
   return (
-    <div className="space-y-3">
+    <div ref={rootRef} className="space-y-3 select-text">
       <div className={isLight ? "text-neutral-700" : "text-neutral-300"}>
         <strong className={isLight ? "text-neutral-900" : "text-neutral-100"}>Welcome to {appName}.</strong> Here is how to get started.
       </div>
@@ -366,6 +411,7 @@ export default function CuriosChatWelcomeCard(props: {
             typeText="Signup, Signin or Guest"
             delayMs={180}
             isLight={isLight}
+            animate={!selectionActive}
           />
 
           <WelcomeStepCard
@@ -390,6 +436,7 @@ export default function CuriosChatWelcomeCard(props: {
             }
             delayMs={320}
             isLight={isLight}
+            animate={!selectionActive}
           />
 
           <WelcomeStepCard
@@ -399,6 +446,7 @@ export default function CuriosChatWelcomeCard(props: {
             typeText="Use browser"
             delayMs={460}
             isLight={isLight}
+            animate={!selectionActive}
           />
 
           <div className="lg:col-span-3">
@@ -408,7 +456,8 @@ export default function CuriosChatWelcomeCard(props: {
               description="Talk with your browser. You can ask Curios to compare websites, inspect pages, and analyze content in real time - a smart browser for you."
               delayMs={600}
               isLight={isLight}
-              footer={<RotatingPromptExamples examples={EXAMPLE_PROMPTS} isLight={isLight} />}
+              animate={!selectionActive}
+              footer={<RotatingPromptExamples examples={EXAMPLE_PROMPTS} isLight={isLight} animate={!selectionActive} />}
             />
           </div>
         </div>

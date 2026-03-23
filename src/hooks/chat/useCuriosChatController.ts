@@ -187,6 +187,7 @@ export function useCuriosChatController(args: {
 
   const [historyLoading, setHistoryLoading] = useState<boolean>(true);
   const [historyError, setHistoryError] = useState<string | null>(null);
+  const [initialLoadComplete, setInitialLoadComplete] = useState<boolean>(false);
   const [oldestCursor, setOldestCursor] = useState<string | null>(null);
   const [newestCursor, setNewestCursor] = useState<string | null>(null);
   const [hasMoreBefore, setHasMoreBefore] = useState<boolean>(false);
@@ -525,8 +526,12 @@ export function useCuriosChatController(args: {
 
     didRunInitialLoadRef.current = true;
     (async () => {
-      await refreshServerSession({ reason: "mount", setBusy: true });
-      await loadInitialHistory();
+      try {
+        await refreshServerSession({ reason: "mount", setBusy: true });
+        await loadInitialHistory();
+      } finally {
+        setInitialLoadComplete(true);
+      }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiBase, supabaseAvailable, authLoading]);
@@ -678,6 +683,7 @@ export function useCuriosChatController(args: {
     selectedProvider,
     historyLoading,
     historyError,
+    initialLoadComplete,
     hasMoreBefore,
     loadingOlder,
     loadOlderHistory,

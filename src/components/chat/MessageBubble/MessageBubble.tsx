@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import DOMPurify from "dompurify";
+import { Check, Copy } from "lucide-react";
 import type { Ui } from "../shared/types";
 import { getProviderLabel } from "../../../utils/getProviderLabel";
 
@@ -155,36 +156,31 @@ export default function MessageBubble({
       <div className="select-text break-words whitespace-pre-wrap">{finalText}</div>
     );
 
-  const bubbleBody = (
-    <>
-      {showCopyButton ? (
-        <div className="mb-2 flex justify-end">
-          <button
-            type="button"
-            onClick={handleCopy}
-            className="rounded-md border border-current/15 px-2 py-1 text-[11px] font-medium opacity-70 transition hover:opacity-100"
-            title="Copy plain text"
-            aria-label="Copy plain text"
-          >
-            {copyState === "copied" ? "Copied" : copyState === "error" ? "Retry copy" : "Copy"}
-          </button>
-        </div>
-      ) : null}
-      {renderedText}
-    </>
-  );
+  const bubbleBody = renderedText;
+  const copyButton = showCopyButton ? (
+    <button
+      type="button"
+      onClick={handleCopy}
+      className="inline-flex h-7 w-7 items-center justify-center rounded-md opacity-60 transition hover:bg-neutral-500/10 hover:opacity-100"
+      title={copyState === "copied" ? "Copied" : copyState === "error" ? "Retry copy" : "Copy plain text"}
+      aria-label={copyState === "copied" ? "Copied" : "Copy plain text"}
+    >
+      {copyState === "copied" ? <Check className="h-3.5 w-3.5" aria-hidden /> : <Copy className="h-3.5 w-3.5" aria-hidden />}
+    </button>
+  ) : null;
 
   if (position === "center" || isSystem) {
     return (
-      <div className="flex justify-center">
+      <div className="flex flex-col items-center">
         <div className={isSystem ? "max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-2 text-xs text-neutral-500" : undefined}>
           {bubbleBody}
         </div>
+        {copyButton ? <div className="mt-1">{copyButton}</div> : null}
       </div>
     );
   }
   return (
-    <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
+    <div className={`flex flex-col ${isUser ? "items-end" : "items-start"}`}>
       <div
         className={[
           "max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm leading-relaxed",
@@ -193,6 +189,7 @@ export default function MessageBubble({
       >
         {bubbleBody}
       </div>
+      {copyButton ? <div className="mt-1">{copyButton}</div> : null}
     </div>
   );
 }

@@ -12,6 +12,7 @@ import { SUPPORTED_PROVIDER_LABELS } from "../../../utils/getProviderLabel";
 import CuriosChatHero from "./CuriosChatHero";
 import CuriosChatWelcomeCard from "./CuriosChatWelcomeCard";
 import CuriosChatIntroScreen from "./CuriosChatIntroScreen";
+import CuriosChatLoadingScreen from "./CuriosChatLoadingScreen";
 import CuriosChatSidebar from "./CuriosChatSidebar";
 import CuriosChatHeader from "./CuriosChatHeader";
 import CuriosChatMain from "./CuriosChatMain";
@@ -20,6 +21,17 @@ import CuriosChatMobileSidebar from "./CuriosChatMobileSidebar";
 
 const TOP_HISTORY_LOAD_THRESHOLD_PX = 120;
 const STICK_TO_BOTTOM_THRESHOLD_PX = 120;
+
+function hasActiveSelectionWithin(container: HTMLElement | null): boolean {
+  if (!container || typeof window === "undefined" || typeof window.getSelection !== "function") return false;
+  const selection = window.getSelection();
+  if (!selection || selection.isCollapsed) return false;
+
+  const anchorNode = selection.anchorNode;
+  const focusNode = selection.focusNode;
+
+  return Boolean((anchorNode && container.contains(anchorNode)) || (focusNode && container.contains(focusNode)));
+}
 
 export default function CuriosChat() {
   const { loading: authLoading, user, session, supabaseAvailable, authRedirectError, signOut } = useAuth();
@@ -109,6 +121,7 @@ export default function CuriosChat() {
     selectedProvider,
     historyLoading,
     historyError,
+    initialLoadComplete,
     hasMoreBefore,
     loadingOlder,
     loadOlderHistory,
@@ -183,6 +196,7 @@ export default function CuriosChat() {
   const firstConversationMessageId = conversationMessageCount > 0 ? conversationMessages[0].id : null;
   const lastConversationMessageId = conversationMessageCount > 0 ? conversationMessages[conversationMessageCount - 1].id : null;
   const showIntroScreen = conversationMessageCount === 0;
+  const showStartupLoadingScreen = (supabaseAvailable && authLoading) || !initialLoadComplete;
   const previousConversationSnapshotRef = useRef<{ count: number; firstId: string | null; lastId: string | null }>({
     count: 0,
     firstId: null,
@@ -211,6 +225,15 @@ export default function CuriosChat() {
       previousSnapshot.lastId === lastConversationMessageId;
     const didAppendLatestMessage =
       conversationMessageCount > 0 && lastConversationMessageId !== previousSnapshot.lastId && !didPrependOlderMessages;
+
+    if (hasActiveSelectionWithin(scrollerRef.current)) {
+      previousConversationSnapshotRef.current = {
+        count: conversationMessageCount,
+        firstId: firstConversationMessageId,
+        lastId: lastConversationMessageId,
+      };
+      return;
+    }
 
     const el = bottomRef.current as unknown as { scrollIntoView?: (opts?: any) => void } | null;
     if ((didLeaveIntro || (didAppendLatestMessage && shouldStickToBottomRef.current)) && el && typeof el.scrollIntoView === "function") {
@@ -366,6 +389,7 @@ export default function CuriosChat() {
   const handleMaybeLoadOlder = useCallback(() => {
     const el = scrollerRef.current;
     if (!el) return;
+    if (hasActiveSelectionWithin(el)) return;
 
     const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
     shouldStickToBottomRef.current = distanceFromBottom <= STICK_TO_BOTTOM_THRESHOLD_PX;
@@ -375,6 +399,22 @@ export default function CuriosChat() {
     if (loadingOlder) return;
     loadOlderHistory();
   }, [hasMoreBefore, loadingOlder, loadOlderHistory]);
+
+  if (showStartupLoadingScreen) {
+    return (
+      <CuriosChatLoadingScreen
+        ui={ui}
+        isLight={isLight}
+        logoUrl={curiosLogo}
+        appName={APP_NAME}
+        statusText={
+          supabaseAvailable && authLoading
+            ? "Checking your sign-in state and preparing the right chat view…"
+            : "Restoring your latest session and deciding whether to open the welcome flow or your existing conversation…"
+        }
+      />
+    );
+  }
 
   if (showIntroScreen) {
     return (
