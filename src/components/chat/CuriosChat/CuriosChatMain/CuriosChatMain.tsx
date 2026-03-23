@@ -6,8 +6,6 @@ import type { Msg, Ui } from "../../shared/types";
 export default function CuriosChatMain(props: {
   ui: Ui;
   messages: Msg[];
-  introLogoId?: string;
-  introActive?: boolean;
   sessionError: string | null;
   historyError: string | null;
   hasMoreBefore: boolean;
@@ -23,8 +21,6 @@ export default function CuriosChatMain(props: {
   const {
     ui,
     messages,
-    introLogoId,
-    introActive,
     sessionError,
     historyError,
     hasMoreBefore,
@@ -82,13 +78,8 @@ export default function CuriosChatMain(props: {
         )}
 
         {messages.map((m) => {
-          const isIntroLogo = Boolean(introActive && introLogoId && m.id === introLogoId);
           return (
-            <div
-              key={m.id}
-              data-curios-msg-id={m.id}
-              className={isIntroLogo ? "curios-logo-intro" : undefined}
-            >
+            <div key={m.id} data-curios-msg-id={m.id}>
               <MessageBubble role={m.role} text={m.text} ui={ui} position={m.position} messageType={m.messageType} />
             </div>
           );

@@ -38,6 +38,7 @@ const meta = {
     isSending: false,
     sessionId: "sess_123",
     composerRef: { current: null },
+    layout: "docked",
   },
   argTypes: {
     ui: { control: false },
@@ -56,5 +57,16 @@ export const MaskedInput: Story = {
   args: {
     maskInput: true,
     input: "super secret",
+  },
+};
+
+export const Inline: Story = {
+  parameters: {
+    layout: "centered",
+  },
+  args: {
+    layout: "inline",
+    showSessionId: false,
+    input: "",
   },
 };

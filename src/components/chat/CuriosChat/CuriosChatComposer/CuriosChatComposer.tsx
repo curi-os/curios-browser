@@ -14,6 +14,8 @@ export default function CuriosChatComposer(props: {
   isSending: boolean;
   sessionId: string;
   composerRef: React.RefObject<HTMLDivElement | null>;
+  layout?: "docked" | "inline";
+  showSessionId?: boolean;
 }) {
   const {
     ui,
@@ -26,11 +28,18 @@ export default function CuriosChatComposer(props: {
     isSending,
     sessionId,
     composerRef,
+    layout = "docked",
+    showSessionId = layout === "docked",
   } = props;
 
+  const isDocked = layout === "docked";
+
   return (
-    <div ref={composerRef} className={`fixed inset-x-0 bottom-0 border-t ${ui.border} ${ui.topbarBg} backdrop-blur md:left-80`}>
-      <div className="mx-auto w-full max-w-4xl px-4 py-4">
+    <div
+      ref={composerRef}
+      className={isDocked ? `fixed inset-x-0 bottom-0 border-t ${ui.border} ${ui.topbarBg} backdrop-blur md:left-80` : undefined}
+    >
+      <div className={isDocked ? "mx-auto w-full max-w-4xl px-4 py-4" : "w-full"}>
         <div className={`rounded-2xl border ${ui.border} ${ui.card} p-2`}>
           <textarea
             value={input}
@@ -59,9 +68,11 @@ export default function CuriosChatComposer(props: {
           </div>
         </div>
 
-        <div className="mt-2 text-center text-[11px] text-neutral-600 md:hidden">
-          Session: <span className="font-mono">{sessionId}</span>
-        </div>
+        {showSessionId ? (
+          <div className={isDocked ? "mt-2 text-center text-[11px] text-neutral-600 md:hidden" : "mt-2 text-center text-[11px] text-neutral-500"}>
+            Session: <span className="font-mono">{sessionId}</span>
+          </div>
+        ) : null}
       </div>
     </div>
   );
