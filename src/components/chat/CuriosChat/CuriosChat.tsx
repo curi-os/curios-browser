@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import curiosLogoWhiteUrl from "../../../images/curios-logo-white.png";
 import curiosLogoDarkUrl from "../../../images/curios-logo-dark.png";
 import { uid } from "../../../utils/uid";
@@ -47,8 +47,8 @@ export default function CuriosChat() {
     return <CuriosChatHero logoUrl={curiosLogo} appName={APP_NAME} isLight={isLight} />;
   }
 
-  function renderGreeting(opts: { loggedIn: boolean; userLabel?: string }) {
-    return (
+  const renderGreeting = useCallback(
+    (opts: { loggedIn: boolean; userLabel?: string }) => (
       <CuriosChatWelcomeCard
         appName={APP_NAME}
         isLight={isLight}
@@ -56,8 +56,9 @@ export default function CuriosChat() {
         userLabel={opts.userLabel}
         supportedProviders={SUPPORTED_PROVIDER_LABELS}
       />
-    );
-  }
+    ),
+    [isLight]
+  );
 
   function appendAssistantMessage(text: string) {
     setMessages((prev) => [
@@ -211,7 +212,7 @@ export default function CuriosChat() {
     setMessages((prev) =>
       prev.map((m) => (m.id === greetingMsgIdRef.current ? { ...m, text: renderGreeting({ loggedIn, userLabel }) } : m))
     );
-  }, [supabaseAvailable, authLoading, effectiveUser, effectiveUserLabel]);
+  }, [supabaseAvailable, authLoading, effectiveUser, effectiveUserLabel, renderGreeting]);
 
   function onSignOut() {
     signOut();
