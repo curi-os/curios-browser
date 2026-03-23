@@ -1,7 +1,7 @@
 import React from "react";
 
-import CuriosChatHero from "../CuriosChatHero";
-import type { Ui } from "../../shared/types";
+import CuriosChatHero from "./CuriosChatHero";
+import type { Ui } from "../shared/types";
 
 export default function CuriosChatLoadingScreen(props: {
   ui: Ui;
