@@ -410,7 +410,7 @@ export default function CuriosChat() {
         statusText={
           supabaseAvailable && authLoading
             ? "Checking your sign-in state and preparing the right chat view…"
-            : "Restoring your latest session and deciding whether to open the welcome flow or your existing conversation…"
+            : "Restoring your latest session…"
         }
       />
     );

@@ -13,12 +13,19 @@ const EXAMPLE_PROMPTS = [
 function TypeInstruction(props: {
   text: string;
   isLight: boolean;
+  delayMs?: number;
   tooltip?: React.ReactNode;
   tooltipAriaLabel?: string;
 }) {
-  const { text, isLight, tooltip, tooltipAriaLabel } = props;
+  const { text, isLight, delayMs = 0, tooltip, tooltipAriaLabel } = props;
   const [tooltipOpen, setTooltipOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const typeWidth = `${Math.max(text.length, 1)}ch`;
+  const typeAnimationStyle = {
+    maxWidth: typeWidth,
+    "--curios-type-width": typeWidth,
+    animation: `curios-type-reveal ${Math.max(text.length * 28, 420)}ms steps(${Math.max(text.length, 1)}, end) ${delayMs}ms both`,
+  } as React.CSSProperties & { "--curios-type-width": string };
 
   useEffect(() => {
     if (!tooltipOpen) return;
@@ -56,8 +63,10 @@ function TypeInstruction(props: {
         <span className={["font-semibold uppercase tracking-[0.2em]", isLight ? "text-neutral-500" : "text-neutral-400"].join(" ")}>
           Type
         </span>
-        <span className="whitespace-nowrap">{text}</span>
-        <span aria-hidden="true" className="opacity-40">
+        <span className="curios-type-mask" style={typeAnimationStyle}>
+          <span className="inline-block whitespace-nowrap">{text}</span>
+        </span>
+        <span aria-hidden="true" className="curios-type-caret opacity-40">
           |
         </span>
       </div>
@@ -146,10 +155,11 @@ function WelcomeStepCard(props: {
   description: string;
   typeText?: string;
   typeTooltip?: React.ReactNode;
+  delayMs?: number;
   isLight: boolean;
   footer?: React.ReactNode;
 }) {
-  const { step, title, description, typeText, typeTooltip, isLight, footer } = props;
+  const { step, title, description, typeText, typeTooltip, delayMs = 0, isLight, footer } = props;
 
   return (
     <div className={["h-full rounded-2xl border px-3 py-2.5", isLight ? "border-neutral-200 bg-white/70" : "border-neutral-800 bg-neutral-900/40"].join(" ")}>
@@ -166,6 +176,7 @@ function WelcomeStepCard(props: {
             <TypeInstruction
               text={typeText}
               isLight={isLight}
+              delayMs={delayMs}
               tooltip={typeTooltip}
               tooltipAriaLabel={typeTooltip ? "Supported providers" : undefined}
             />
@@ -221,6 +232,7 @@ export default function CuriosChatWelcomeCard(props: {
                   </div>
                 </div>
               }
+              delayMs={180}
               isLight={isLight}
             />
 
@@ -229,6 +241,7 @@ export default function CuriosChatWelcomeCard(props: {
               title="Use apps"
               description="Open the Browser app once your provider is connected."
               typeText="Use browser"
+              delayMs={320}
               isLight={isLight}
             />
 
@@ -262,6 +275,7 @@ export default function CuriosChatWelcomeCard(props: {
             title="Signup or Signin"
             description="Create your account or signin."
             typeText="Signup, Signin or Guest"
+            delayMs={180}
             isLight={isLight}
           />
 
@@ -285,6 +299,7 @@ export default function CuriosChatWelcomeCard(props: {
                 </div>
               </div>
             }
+            delayMs={320}
             isLight={isLight}
           />
 
@@ -293,6 +308,7 @@ export default function CuriosChatWelcomeCard(props: {
             title="Use apps"
             description="Start using the Browser app."
             typeText="Use browser"
+            delayMs={460}
             isLight={isLight}
           />
 
