@@ -107,17 +107,102 @@ function RotatingPromptExamples(props: {
   isLight: boolean;
 }) {
   const { examples, isLight } = props;
-  const firstExample = examples[0] ?? "";
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [visibleText, setVisibleText] = useState("");
+  const selectionActiveRef = useRef(false);
+
+  useEffect(() => {
+    function handleSelectionChange() {
+      const selection = typeof window !== "undefined" && typeof window.getSelection === "function" ? window.getSelection() : null;
+      selectionActiveRef.current = Boolean(selection && !selection.isCollapsed);
+    }
+
+    document.addEventListener("selectionchange", handleSelectionChange);
+    return () => {
+      document.removeEventListener("selectionchange", handleSelectionChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    const prefersReduced =
+      typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    if (prefersReduced) {
+      setVisibleText(examples[0] ?? "");
+      return;
+    }
+
+    let exampleIndex = 0;
+    let charIndex = 0;
+    let direction: "typing" | "deleting" = "typing";
+    let timeoutId: number | null = null;
+    let cancelled = false;
+
+    function schedule(nextDelay: number) {
+      timeoutId = window.setTimeout(tick, nextDelay);
+    }
+
+    function tick() {
+      if (cancelled) return;
+
+      if (selectionActiveRef.current) {
+        schedule(120);
+        return;
+      }
+
+      const current = examples[exampleIndex] ?? "";
+
+      if (direction === "typing") {
+        charIndex += 1;
+        setActiveIndex(exampleIndex);
+        setVisibleText(current.slice(0, charIndex));
+
+        if (charIndex >= current.length) {
+          direction = "deleting";
+          schedule(1600);
+          return;
+        }
+
+        schedule(28);
+        return;
+      }
+
+      charIndex -= 1;
+      setVisibleText(current.slice(0, Math.max(0, charIndex)));
+
+      if (charIndex <= 0) {
+        direction = "typing";
+        exampleIndex = (exampleIndex + 1) % examples.length;
+        setActiveIndex(exampleIndex);
+        schedule(240);
+        return;
+      }
+
+      schedule(18);
+    }
+
+    setVisibleText("");
+    schedule(260);
+
+    return () => {
+      cancelled = true;
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+      }
+    };
+  }, [examples]);
 
   return (
     <div className={["mt-2 rounded-2xl border px-3 py-2.5", isLight ? "border-neutral-300 bg-neutral-50/80" : "border-neutral-700 bg-neutral-900/70"].join(" ")}>
       <div className={["text-[11px] font-semibold uppercase tracking-[0.24em]", isLight ? "text-neutral-500" : "text-neutral-400"].join(" ")}>
         Try asking
       </div>
-      <div className={["mt-2 flex items-start gap-2 font-mono text-[12px] sm:text-[13px]", isLight ? "text-neutral-700" : "text-neutral-200"].join(" ")}>
+      <div className={["mt-2 flex min-h-[2.6rem] items-start gap-2 font-mono text-[12px] sm:text-[13px]", isLight ? "text-neutral-700" : "text-neutral-200"].join(" ")}>
         <span className="text-curios-accent">&gt;</span>
         <span className="min-w-0 flex-1 break-words">
-          {firstExample || "\u00A0"}
+          {visibleText || examples[activeIndex] || "\u00A0"}
           <span aria-hidden="true" className="ml-0.5 inline-block opacity-40">|</span>
         </span>
       </div>
