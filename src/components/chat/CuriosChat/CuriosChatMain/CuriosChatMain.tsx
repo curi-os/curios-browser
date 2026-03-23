@@ -36,7 +36,7 @@ export default function CuriosChatMain(props: {
 
   return (
     <main
-      className="mx-auto w-full max-w-4xl flex-1 overflow-y-auto px-4 pt-6"
+      className="mx-auto min-h-0 w-full max-w-4xl flex-1 overflow-y-auto px-4 pt-6"
       style={{ paddingBottom: composerHeight + 16 }}
       ref={scrollerRef}
       onScroll={onMaybeLoadOlder}

@@ -18,6 +18,9 @@ import CuriosChatMain from "./CuriosChatMain";
 import CuriosChatComposer from "./CuriosChatComposer";
 import CuriosChatMobileSidebar from "./CuriosChatMobileSidebar";
 
+const TOP_HISTORY_LOAD_THRESHOLD_PX = 120;
+const STICK_TO_BOTTOM_THRESHOLD_PX = 120;
+
 export default function CuriosChat() {
   const { loading: authLoading, user, session, supabaseAvailable, authRedirectError, signOut } = useAuth();
 
@@ -176,15 +179,51 @@ export default function CuriosChat() {
   }
 
   const conversationMessages = messages.filter((m) => !isStaticIntroMessage(m.id));
-  const showIntroScreen = conversationMessages.length === 0;
+  const conversationMessageCount = conversationMessages.length;
+  const firstConversationMessageId = conversationMessageCount > 0 ? conversationMessages[0].id : null;
+  const lastConversationMessageId = conversationMessageCount > 0 ? conversationMessages[conversationMessageCount - 1].id : null;
+  const showIntroScreen = conversationMessageCount === 0;
+  const previousConversationSnapshotRef = useRef<{ count: number; firstId: string | null; lastId: string | null }>({
+    count: 0,
+    firstId: null,
+    lastId: null,
+  });
+  const shouldStickToBottomRef = useRef(true);
 
   useEffect(() => {
-    if (showIntroScreen) return;
-    const el = bottomRef.current as unknown as { scrollIntoView?: (opts?: any) => void } | null;
-    if (el && typeof el.scrollIntoView === "function") {
-      el.scrollIntoView({ behavior: "smooth", block: "end" });
+    const previousSnapshot = previousConversationSnapshotRef.current;
+
+    if (showIntroScreen) {
+      previousConversationSnapshotRef.current = {
+        count: conversationMessageCount,
+        firstId: firstConversationMessageId,
+        lastId: lastConversationMessageId,
+      };
+      shouldStickToBottomRef.current = true;
+      return;
     }
-  }, [showIntroScreen, conversationMessages, isSending]);
+
+    const didLeaveIntro = previousSnapshot.count === 0 && conversationMessageCount > 0;
+    const didPrependOlderMessages =
+      previousSnapshot.count > 0 &&
+      conversationMessageCount > previousSnapshot.count &&
+      previousSnapshot.firstId !== firstConversationMessageId &&
+      previousSnapshot.lastId === lastConversationMessageId;
+    const didAppendLatestMessage =
+      conversationMessageCount > 0 && lastConversationMessageId !== previousSnapshot.lastId && !didPrependOlderMessages;
+
+    const el = bottomRef.current as unknown as { scrollIntoView?: (opts?: any) => void } | null;
+    if ((didLeaveIntro || (didAppendLatestMessage && shouldStickToBottomRef.current)) && el && typeof el.scrollIntoView === "function") {
+      el.scrollIntoView({ behavior: didLeaveIntro ? "auto" : "smooth", block: "end" });
+      shouldStickToBottomRef.current = true;
+    }
+
+    previousConversationSnapshotRef.current = {
+      count: conversationMessageCount,
+      firstId: firstConversationMessageId,
+      lastId: lastConversationMessageId,
+    };
+  }, [showIntroScreen, conversationMessageCount, firstConversationMessageId, lastConversationMessageId]);
 
   useEffect(() => {
     function measure() {
@@ -324,6 +363,19 @@ export default function CuriosChat() {
     persistContextSelection("browser");
   }
 
+  const handleMaybeLoadOlder = useCallback(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    shouldStickToBottomRef.current = distanceFromBottom <= STICK_TO_BOTTOM_THRESHOLD_PX;
+
+    if (el.scrollTop > TOP_HISTORY_LOAD_THRESHOLD_PX) return;
+    if (!hasMoreBefore) return;
+    if (loadingOlder) return;
+    loadOlderHistory();
+  }, [hasMoreBefore, loadingOlder, loadOlderHistory]);
+
   if (showIntroScreen) {
     return (
       <CuriosChatIntroScreen
@@ -400,14 +452,7 @@ export default function CuriosChat() {
             composerHeight={composerHeight}
             scrollerRef={scrollerRef}
             bottomRef={bottomRef}
-            onMaybeLoadOlder={() => {
-              const el = scrollerRef.current;
-              if (!el) return;
-              if (el.scrollTop > 120) return;
-              if (!hasMoreBefore) return;
-              if (loadingOlder) return;
-              loadOlderHistory();
-            }}
+            onMaybeLoadOlder={handleMaybeLoadOlder}
           />
 
           <CuriosChatComposer
