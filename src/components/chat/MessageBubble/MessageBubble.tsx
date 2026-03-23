@@ -171,25 +171,29 @@ export default function MessageBubble({
 
   if (position === "center" || isSystem) {
     return (
-      <div className="flex flex-col items-center">
-        <div className={isSystem ? "max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-2 text-xs text-neutral-500" : undefined}>
-          {bubbleBody}
+      <div className="flex justify-center">
+        <div className="inline-flex max-w-[85%] flex-col items-end">
+          <div className={isSystem ? "whitespace-pre-wrap rounded-2xl px-4 py-2 text-xs text-neutral-500" : undefined}>
+            {bubbleBody}
+          </div>
+          {copyButton ? <div className="mt-1">{copyButton}</div> : null}
         </div>
-        {copyButton ? <div className="mt-1">{copyButton}</div> : null}
       </div>
     );
   }
   return (
-    <div className={`flex flex-col ${isUser ? "items-end" : "items-start"}`}>
-      <div
-        className={[
-          "max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm leading-relaxed",
-          isUser ? ui.userBubble : ui.assistantBubble,
-        ].join(" ")}
-      >
-        {bubbleBody}
+    <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
+      <div className="inline-flex max-w-[85%] flex-col items-end">
+        <div
+          className={[
+            "whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm leading-relaxed",
+            isUser ? ui.userBubble : ui.assistantBubble,
+          ].join(" ")}
+        >
+          {bubbleBody}
+        </div>
+        {copyButton ? <div className="mt-1">{copyButton}</div> : null}
       </div>
-      {copyButton ? <div className="mt-1">{copyButton}</div> : null}
     </div>
   );
 }
