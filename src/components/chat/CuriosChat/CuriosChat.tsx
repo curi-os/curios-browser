@@ -8,12 +8,72 @@ import { useAuth } from "../../../hooks/auth/useAuth";
 import { APP_NAME } from "../../../branding";
 import { useCuriosChatController } from "../../../hooks/chat/useCuriosChatController";
 import { API_BASE, SYSTEM_CONTEXT_HELP } from "../../../config/curiosChat";
+import { SUPPORTED_PROVIDER_LABELS } from "../../../utils/getProviderLabel";
 import CuriosChatHero from "./CuriosChatHero";
 import CuriosChatSidebar from "./CuriosChatSidebar";
 import CuriosChatHeader from "./CuriosChatHeader";
 import CuriosChatMain from "./CuriosChatMain";
 import CuriosChatComposer from "./CuriosChatComposer";
 import CuriosChatMobileSidebar from "./CuriosChatMobileSidebar";
+
+function TypeInstruction({ text, isLight, delayMs = 0 }: { text: string; isLight: boolean; delayMs?: number }) {
+  const [visibleText, setVisibleText] = useState("");
+
+  useEffect(() => {
+    const prefersReduced =
+      typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    if (prefersReduced) {
+      setVisibleText(text);
+      return;
+    }
+
+    setVisibleText("");
+
+    let index = 0;
+    let intervalId: number | null = null;
+
+    const timeoutId = window.setTimeout(() => {
+      intervalId = window.setInterval(() => {
+        index += 1;
+        setVisibleText(text.slice(0, index));
+
+        if (index >= text.length && intervalId !== null) {
+          window.clearInterval(intervalId);
+        }
+      }, 28);
+    }, delayMs);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      if (intervalId !== null) {
+        window.clearInterval(intervalId);
+      }
+    };
+  }, [text, delayMs]);
+
+  const complete = visibleText.length >= text.length;
+
+  return (
+    <div
+      className={[
+        "mt-2 inline-flex max-w-full items-center gap-2 rounded-xl border px-3 py-2 font-mono text-[12px]",
+        isLight ? "border-neutral-300 bg-neutral-50 text-neutral-700" : "border-neutral-700 bg-neutral-900 text-neutral-200",
+      ].join(" ")}
+    >
+      <span className={isLight ? "text-emerald-700" : "text-emerald-400"}>&gt;</span>
+      <span className={["font-semibold uppercase tracking-[0.2em]", isLight ? "text-neutral-500" : "text-neutral-400"].join(" ")}>
+        Type
+      </span>
+      <span className="whitespace-nowrap">{visibleText || "\u00A0"}</span>
+      <span aria-hidden="true" className={complete ? "opacity-40" : "animate-pulse"}>
+        |
+      </span>
+    </div>
+  );
+}
 
 export default function CuriosChat() {
   const { loading: authLoading, user, session, supabaseAvailable, authRedirectError, signOut } = useAuth();
@@ -44,25 +104,143 @@ export default function CuriosChat() {
     return <CuriosChatHero logoUrl={curiosLogo} appName={APP_NAME} isLight={isLight} />;
   }
 
+  function renderStepCard(opts: {
+    step: string;
+    title: string;
+    description: string;
+    typeText: string;
+    hint?: React.ReactNode;
+    delayMs: number;
+  }) {
+    return (
+      <div className={["rounded-2xl border px-3 py-3", isLight ? "border-neutral-200 bg-white/70" : "border-neutral-800 bg-neutral-900/40"].join(" ")}>
+        <div className="grid grid-cols-[auto_1fr] gap-3">
+          <div className={["pt-0.5 text-[11px] font-semibold tracking-[0.28em]", isLight ? "text-neutral-500" : "text-neutral-400"].join(" ")}>
+            {opts.step}
+          </div>
+          <div>
+            <div className="text-sm font-semibold">{opts.title}</div>
+            <div className={["mt-1 text-[13px] leading-6", isLight ? "text-neutral-700" : "text-neutral-300"].join(" ")}>
+              {opts.description}
+            </div>
+            <TypeInstruction text={opts.typeText} isLight={isLight} delayMs={opts.delayMs} />
+            {opts.hint ? (
+              <div className={["mt-2 text-[12px] leading-5", isLight ? "text-neutral-500" : "text-neutral-400"].join(" ")}>
+                {opts.hint}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  function renderSupportedProviders() {
+    return (
+      <div className={["rounded-2xl border px-3 py-3", isLight ? "border-neutral-200 bg-white/70" : "border-neutral-800 bg-neutral-900/40"].join(" ")}>
+        <div className={["text-[11px] font-semibold uppercase tracking-[0.28em]", isLight ? "text-neutral-500" : "text-neutral-400"].join(" ")}>
+          Supported providers
+        </div>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {SUPPORTED_PROVIDER_LABELS.map((provider) => (
+            <span
+              key={provider}
+              className={[
+                "rounded-full border px-2 py-1 text-[11px] font-semibold",
+                isLight ? "border-neutral-300 bg-white text-neutral-700" : "border-neutral-700 bg-neutral-900 text-neutral-200",
+              ].join(" ")}
+            >
+              {provider}
+            </span>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   function renderGreeting(opts: { loggedIn: boolean; userLabel?: string }) {
     if (opts.loggedIn) {
       return (
-        <>
-          You are signed in
-          {opts.userLabel ? (
-            <>
-              {" "}as <strong>{opts.userLabel}</strong>
-            </>
-          ) : null}
-          . What can I do for you?
-        </>
+        <div className="space-y-3">
+          <div>
+            You are signed in
+            {opts.userLabel ? (
+              <>
+                {" "}as <strong>{opts.userLabel}</strong>
+              </>
+            ) : null}
+            .
+          </div>
+          <div className={["rounded-3xl border p-4", isLight ? "border-neutral-200 bg-white/90 shadow-[0_18px_40px_rgba(15,23,42,0.08)]" : "border-neutral-800 bg-neutral-950/95 shadow-[0_18px_50px_rgba(0,0,0,0.35)]"].join(" ")}>
+            <div className={["text-xs font-semibold uppercase tracking-[0.28em]", isLight ? "text-neutral-500" : "text-neutral-400"].join(" ")}>
+              Next steps
+            </div>
+            <div className="mt-3 space-y-3">
+              {renderStepCard({
+                step: "01",
+                title: "Change provider",
+                description: "Connect your provider to start using Curios with your own API key.",
+                typeText: "Change provider",
+                hint: "Bring your own provider, then Curios can start working with your account.",
+                delayMs: 180,
+              })}
+              {renderStepCard({
+                step: "02",
+                title: "Use apps",
+                description: "Open the Browser app once your provider is connected.",
+                typeText: "Use browser",
+                hint: "You can also select Browser from the context menu.",
+                delayMs: 320,
+              })}
+              {renderSupportedProviders()}
+            </div>
+          </div>
+          <div>Once your provider is connected, you can start using Curios right away.</div>
+        </div>
       );
     }
 
     return (
-      <>
-        Welcome to {APP_NAME}. Do you want to <strong>Signup, Signin in or continue as a guest?</strong>
-      </>
+      <div className="space-y-4">
+        <div className={isLight ? "text-neutral-700" : "text-neutral-300"}>
+          <strong className={isLight ? "text-neutral-900" : "text-neutral-100"}>Welcome to {APP_NAME}.</strong> Here is how to get started.
+        </div>
+        <div className={["rounded-3xl border p-4", isLight ? "border-neutral-200 bg-white/90 shadow-[0_18px_40px_rgba(15,23,42,0.08)]" : "border-neutral-800 bg-neutral-950/95 shadow-[0_18px_50px_rgba(0,0,0,0.35)]"].join(" ")}>
+          <div className={["text-xs font-semibold uppercase tracking-[0.28em]", isLight ? "text-neutral-500" : "text-neutral-400"].join(" ")}>
+            First steps
+          </div>
+          <div className="mt-3 space-y-3">
+            {renderStepCard({
+              step: "01",
+              title: "Signup or Signin",
+              description: "Create your account or sign into an existing one.",
+              typeText: "Signup, Signin or Guest",
+              hint: "Use Guest if you just want to explore before connecting a provider.",
+              delayMs: 180,
+            })}
+            {renderStepCard({
+              step: "02",
+              title: "Change provider",
+              description: "Set your AI provider so Curios can work with your own API key.",
+              typeText: "Change provider",
+              hint: "Bring your own provider and connect Curios to your setup.",
+              delayMs: 320,
+            })}
+            {renderStepCard({
+              step: "03",
+              title: "Use apps",
+              description: "Start using the Browser app after your provider is connected.",
+              typeText: "Use browser",
+              hint: "You can also select Browser in the context menu to launch it.",
+              delayMs: 460,
+            })}
+            {renderSupportedProviders()}
+          </div>
+        </div>
+        <div className={isLight ? "text-neutral-600" : "text-neutral-400"}>
+          You can also continue as a guest if you just want to explore.
+        </div>
+      </div>
     );
   }
 
@@ -177,7 +355,72 @@ export default function CuriosChat() {
   const composerRef = useRef<HTMLDivElement | null>(null);
   const [composerHeight, setComposerHeight] = useState(0);
 
+  const [introActive, setIntroActive] = useState(false);
+  const introStartedRef = useRef(false);
+  const suppressAutoScrollRef = useRef(true);
+
   useEffect(() => {
+    if (introStartedRef.current) return;
+    if (historyLoading) return;
+
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+
+    const logoIndex = messages.findIndex((m) => m.id === logoMsgIdRef.current);
+    const nextMsg = logoIndex >= 0 ? messages[logoIndex + 1] : null;
+    if (!nextMsg) {
+      suppressAutoScrollRef.current = false;
+      return;
+    }
+
+    introStartedRef.current = true;
+    setIntroActive(true);
+
+    const prefersReduced =
+      typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    function escapeForAttrSelector(value: string) {
+      const cssAny = (window as any)?.CSS;
+      if (cssAny && typeof cssAny.escape === "function") return cssAny.escape(value);
+      return value.replace(/\\/g, "\\\\").replace(/\"/g, "\\\"");
+    }
+
+    // 1) Ensure we start at the very top (logo)
+    requestAnimationFrame(() => {
+      const el = scrollerRef.current;
+      if (!el) return;
+      el.scrollTop = 0;
+    });
+
+    // 2) Then scroll to the first message below the logo.
+    const scrollDelayMs = prefersReduced ? 0 : 650;
+    const finishDelayMs = prefersReduced ? 0 : 1400;
+
+    const t1 = window.setTimeout(() => {
+      const el = scrollerRef.current;
+      if (!el) return;
+      const selector = `[data-curios-msg-id="${escapeForAttrSelector(nextMsg.id)}"]`;
+      const target = el.querySelector(selector) as HTMLElement | null;
+      if (!target) return;
+      target.scrollIntoView({ behavior: prefersReduced ? "auto" : "smooth", block: "start" });
+    }, scrollDelayMs);
+
+    const t2 = window.setTimeout(() => {
+      setIntroActive(false);
+      suppressAutoScrollRef.current = false;
+    }, finishDelayMs);
+
+    return () => {
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [historyLoading, messages]);
+
+  useEffect(() => {
+    if (suppressAutoScrollRef.current) return;
     const el = bottomRef.current as unknown as { scrollIntoView?: (opts?: any) => void } | null;
     if (el && typeof el.scrollIntoView === "function") {
       el.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -291,6 +534,8 @@ export default function CuriosChat() {
           <CuriosChatMain
             ui={ui}
             messages={messages}
+            introLogoId={logoMsgIdRef.current}
+            introActive={introActive}
             sessionError={sessionError}
             historyError={historyError}
             hasMoreBefore={hasMoreBefore}

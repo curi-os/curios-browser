@@ -28,14 +28,20 @@ function titleCaseFromIdentifier(value: string) {
 
 const PROVIDER_LABELS: Record<string, string> = {
   openai: "OpenAI",
-  azure_openai: "Azure OpenAI",
   anthropic: "Anthropic",
   google: "Google",
-  gemini: "Google Gemini",
-  xai: "xAI",
-  mistral: "Mistral",
   ollama: "Ollama",
+  custom: "Custom",
+  custom_endpoint: "Custom",
 };
+
+export const SUPPORTED_PROVIDER_LABELS = [
+  PROVIDER_LABELS.openai,
+  PROVIDER_LABELS.anthropic,
+  PROVIDER_LABELS.google,
+  PROVIDER_LABELS.ollama,
+  PROVIDER_LABELS.custom,
+] as const;
 
 export function getProviderLabel(provider: string | null | undefined) {
   if (!provider) return "";

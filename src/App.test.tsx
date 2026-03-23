@@ -10,7 +10,6 @@ test('renders chat greeting message', async () => {
     </AuthProvider>
   );
 
-  // The greeting can briefly be the session-loading message while auth/session bootstrap.
-  const greeting = await screen.findByText(/(welcome to curios|checking your session)/i);
-  expect(greeting).toBeInTheDocument();
+  expect(await screen.findByText(/first steps/i)).toBeInTheDocument();
+  expect(screen.getAllByText(/change provider/i).length).toBeGreaterThan(0);
 });
